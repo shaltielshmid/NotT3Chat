@@ -1,0 +1,137 @@
+/* Thinking Block Styles */
+.thinking-block-container {
+  margin-top: 12px;
+  margin-bottom: 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  overflow: hidden;
+  background-color: #fefce8;
+}
+
+.thinking-block-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  background-color: #fef3c7;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  user-select: none;
+}
+
+.thinking-block-header:hover {
+  background-color: #fde68a;
+}
+
+.thinking-block-header.complete {
+  background-color: #e0e7ff;
+}
+
+.thinking-block-header.complete:hover {
+  background-color: #c7d2fe;
+}
+
+.thinking-header-content {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.thinking-spinner {
+  color: #f59e0b;
+  animation: thinking-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes thinking-pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.thinking-label {
+  font-weight: 500;
+  color: #78350f;
+  font-size: 0.8rem;
+}
+
+.thinking-block-header.complete .thinking-label {
+  color: #3730a3;
+}
+
+.thinking-block-content {
+  padding: 12px;
+  background-color: #fffbeb;
+  border-top: 1px solid #fde68a;
+}
+
+.thinking-warning {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  background-color: #fef2f2;
+  border: 2px solid #fca5a5;
+  border-radius: 6px;
+  text-align: center;
+}
+
+.warning-text {
+  color: #991b1b;
+  line-height: 1.5;
+}
+
+.warning-accept-button {
+  align-self: center;
+  background-color: #dc2626 !important;
+  color: white !important;
+  margin-top: 8px;
+}
+
+.warning-accept-button:hover {
+  background-color: #b91c1c !important;
+}
+
+.thinking-content-inner {
+  padding: 8px;
+  background-color: #f8fafc;
+  border-radius: 6px;
+  max-height: 400px;
+  overflow-y: auto;
+  border: 1px solid #cbd5e1;
+}
+
+.thinking-content-inner.blurred {
+  filter: blur(8px);
+  pointer-events: none;
+}
+
+/* Ensure thinking block markdown content has proper spacing */
+.thinking-content-inner p {
+  margin-bottom: 8px;
+}
+
+.thinking-content-inner p:last-child {
+  margin-bottom: 0;
+}
+
+/* Scrollbar styling for thinking content */
+.thinking-content-inner::-webkit-scrollbar {
+  width: 8px;
+}
+
+.thinking-content-inner::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 4px;
+}
+
+.thinking-content-inner::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+.thinking-content-inner::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}

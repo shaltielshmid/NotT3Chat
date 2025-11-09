@@ -1,0 +1,116 @@
+/* Web Search Block Styles */
+.websearch-block-container {
+  margin-top: 12px;
+  margin-bottom: 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  overflow: hidden;
+  background-color: #f0f9ff;
+}
+
+.websearch-block-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  background-color: #dbeafe;
+  transition: background-color 0.2s;
+  user-select: none;
+}
+
+.websearch-block-header.clickable {
+  cursor: pointer;
+}
+
+.websearch-block-header.clickable:hover {
+  background-color: #bfdbfe;
+}
+
+.websearch-block-header.complete {
+  background-color: #e0f2fe;
+}
+
+.websearch-block-header.complete.clickable:hover {
+  background-color: #bae6fd;
+}
+
+.websearch-header-content {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.websearch-spinner {
+  color: #0284c7;
+  animation: websearch-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes websearch-pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.websearch-icon {
+  color: #0369a1;
+}
+
+.websearch-label {
+  font-weight: 500;
+  color: #075985;
+  font-size: 0.8rem;
+}
+
+.websearch-block-content {
+  padding: 12px;
+  background-color: #f0f9ff;
+  border-top: 1px solid #bfdbfe;
+}
+
+.websearch-urls-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px;
+  background-color: #ffffff;
+  border-radius: 6px;
+  border: 1px solid #cbd5e1;
+}
+
+.websearch-url-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  transition: background-color 0.2s;
+}
+
+.websearch-url-item:hover {
+  background-color: #f8fafc;
+}
+
+.websearch-url-number {
+  color: #64748b;
+  font-weight: 600;
+  min-width: 20px;
+  margin-top: 2px;
+}
+
+.websearch-url-link {
+  flex: 1;
+  text-decoration: none;
+  word-break: break-all;
+}
+
+.websearch-url-link:hover {
+  text-decoration: underline;
+}
+
+.websearch-url-text {
+  color: #0369a1;
+  line-height: 1.5;
+}

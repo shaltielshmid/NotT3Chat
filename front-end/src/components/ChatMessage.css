@@ -27,6 +27,7 @@
 
 .chat-message .message-content.assistant {
   max-width: 85%;
+  min-width: min(600px, 85%);
 }
 
 .chat-message .message-content.user {
@@ -66,6 +67,7 @@
   word-break: break-word;
   overflow: hidden;
   max-width: 100%;
+  width: 100%;
 }
 
 .chat-message .message-paper.user {
@@ -96,28 +98,7 @@
   margin-bottom: 0;
 }
 
-.chat-message .markdown-content code {
-  background-color: rgba(0, 0, 0, 0.1);
-  padding-left: 4px;
-  padding-right: 4px;
-  padding-top: 2px;
-  padding-bottom: 2px;
-  border-radius: 4px;
-  font-family: monospace;
-  font-size: 0.9em;
-}
-
-.chat-message .markdown-content pre {
-  background-color: rgba(0, 0, 0, 0.1);
-  padding: 8px;
-  border-radius: 8px;
-  overflow: auto;
-  font-family: monospace;
-  font-size: 0.9em;
-  margin-top: 8px;
-  margin-bottom: 8px;
-  max-width: 100%;
-}
+/* Code styling is now handled by Streamdown */
 
 .chat-message .markdown-content {
   max-width: 100%;
@@ -126,35 +107,38 @@
   overflow: hidden;
 }
 
-.chat-message .markdown-code-block {
-  margin: 16px 0;
-  max-width: 100%;
-  overflow: hidden;
+/* Ensure br tags from markdown breaks are visible */
+.chat-message .markdown-content br {
+  display: block;
+  content: "";
+  margin: 0;
 }
 
-.chat-message .markdown-code-block > div {
-  border-radius: 8px !important;
-  font-size: 14px !important;
-  margin: 0 !important;
-  max-width: 100% !important;
-  overflow: auto !important;
+/* Support for bidirectional text - paragraphs inherit direction but can be overridden */
+.chat-message .markdown-content p,
+.chat-message .markdown-content div,
+.chat-message .markdown-content li {
+  unicode-bidi: plaintext;
 }
 
-.chat-message .markdown-code-inline {
-  background-color: #f5f5f5;
-  color: #d32f2f;
-  padding: 2px 4px;
-  border-radius: 4px;
-  font-family: monospace;
-  font-size: 0.9em;
-  border: 1px solid #e0e0e0;
-  word-break: break-all;
-  display: inline;
+/* Code should always be LTR */
+.chat-message .markdown-content code,
+.chat-message .markdown-content pre,
+.chat-message .markdown-content pre code {
+  direction: ltr;
+  unicode-bidi: embed;
+  text-align: left;
 }
 
-.chat-message .markdown-pre {
-  margin: 16px 0;
+/* Math blocks should always be LTR */
+.chat-message .markdown-content .katex-display,
+.chat-message .markdown-content .katex {
+  direction: ltr;
+  unicode-bidi: embed;
+  text-align: left;
 }
+
+/* Code block styling is now handled by Streamdown */
 
 .chat-message .markdown-blockquote {
   border-left: 4px solid #1976d2;
@@ -246,6 +230,10 @@
 .chat-message .message-actions .MuiIconButton-root:hover {
   background-color: rgba(0, 0, 0, 0.04);
   color: #374151;
+}
+
+.chat-message .copy-dropdown {
+  margin-left: -8px;
 }
 
 .chat-message .regenerate-dropdown {

@@ -15,11 +15,13 @@ import {
   Send as SendIcon,
   ExitToApp as LogoutIcon,
   Refresh as RefreshIcon,
+  Stop as StopIcon,
 } from '@mui/icons-material';
 import { useSignalR } from '../contexts/SignalRContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useChats } from '../contexts/ChatContext';
 import { chatApi } from '../services/chatApi';
+import { getTextDirection } from '../extra/utils';
 import ChatMessage from './ChatMessage';
 import ChatSidebar from './ChatSidebar';
 import ModelSelector from './ModelSelector';
@@ -31,18 +33,20 @@ const ChatRoom = () => {
   const [pendingMessage, setPendingMessage] = useState('');
   const [selectedModel, setSelectedModel] = useState('');
   const messagesEndRef = useRef(null);
+  const inputDirection = useMemo(() => getTextDirection(messageInput), [messageInput]);
   const { logout } = useAuth();
   const { addNewChat, chats, hasLoaded } = useChats();
   const { chatId } = useParams();
   const navigate = useNavigate();
 
   const activeChat = useMemo(() => chats.find(c => c.id == chatId), [chatId, chats]);
-
+  
   // Use global SignalR connection
   const { 
     messages, 
     sendMessage, 
     regenerateMessage,
+    stopGenerating,
     isConnected, 
     isConnecting,
     currentAssistantMessage, 
@@ -138,6 +142,14 @@ const ChatRoom = () => {
       }
     },
     [chatId, sendMessage, selectedModel, messageInput, createNewChatAndSend]
+  );
+
+  const handleStopGenerating = useCallback(
+    async (e) => {
+      e.preventDefault();
+      await stopGenerating();
+    },
+    [stopGenerating]
   );
 
   const handleLogout = useCallback(() => {
@@ -294,21 +306,35 @@ const ChatRoom = () => {
                         handleSendMessage(e);
                       }
                     }}
+                    slotProps={{
+                      htmlInput: {
+                        dir: inputDirection
+                      }
+                    }}
                   />
-                  <Button
-                    type="submit"
-                    variant="contained"
-                    className="send-button"
-                    disabled={
-                      (chatId && !isConnected) ||
-                      !messageInput.trim() ||
-                      !!currentAssistantMessage ||
-                      isCreatingChat ||
-                      !!pendingMessage
-                    }
-                  >
-                    <SendIcon />
-                  </Button>
+                  {currentAssistantMessage ? (
+                    <Button
+                      variant="contained"
+                      className="send-button"
+                      onClick={handleStopGenerating}
+                    >
+                      <StopIcon />
+                    </Button>
+                  ) : (
+                    <Button
+                      type="submit"
+                      variant="contained"
+                      className="send-button"
+                      disabled={
+                        (chatId && !isConnected) ||
+                        !messageInput.trim() ||
+                        isCreatingChat ||
+                        !!pendingMessage
+                      }
+                    >
+                      <SendIcon />
+                    </Button>
+                  )}
                 </Box>
               </Box>
             </Paper>

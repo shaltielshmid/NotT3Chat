@@ -24,14 +24,16 @@ import {
   ContentCopy, 
   CallSplit, 
   Refresh, 
-  KeyboardArrowDown 
+  KeyboardArrowDown
 } from '@mui/icons-material';
-import ReactMarkdown from 'react-markdown';
+import { Streamdown } from 'streamdown';
 import remarkGfm from 'remark-gfm';
-import rehypeHighlight from 'rehype-highlight';
-import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
-import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import remarkBreaks from 'remark-breaks';
+import remarkMath from 'remark-math';
 import { useModels } from '../contexts/ModelsContext';
+import { getTextDirection } from '../extra/utils';
+import ThinkingBlock from './ThinkingBlock';
+import WebSearchBlock from './WebSearchBlock';
 import './ChatMessage.css';
 
 const formatTime = (timestamp) => {
@@ -39,6 +41,19 @@ const formatTime = (timestamp) => {
     hour: '2-digit',
     minute: '2-digit',
   });
+};
+
+// Convert LaTeX bracket syntax to dollar syntax for remark-math
+const convertLatexBrackets = (text) => {
+  if (!text) return text;
+  
+  // Convert \[ \] to $$ $$
+  let result = text.replace(/\\\[([\s\S]*?)\\\]/g, (match, content) => `$$${content}$$`);
+  
+  // Convert \( \) to $ $
+  result = result.replace(/\\\(([\s\S]*?)\\\)/g, (match, content) => `$${content}$`);
+  
+  return result;
 };
 
 const ChatMessage = ({ 
@@ -51,14 +66,163 @@ const ChatMessage = ({
 }) => {
   const { models } = useModels();
   const [regenerateMenuAnchor, setRegenerateMenuAnchor] = useState(null);
+  const [copyMenuAnchor, setCopyMenuAnchor] = useState(null);
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
   const [pendingRegenerate, setPendingRegenerate] = useState(null);
   const isUser = useMemo(() => message.type === 'user', [message]);
   const isAssistant = useMemo(() => message.type === 'assistant', [message]);
   
-  const handleCopy = useCallback(() => {
+  // Parse content to create interleaved segments of regular content, thinking blocks, and websearch blocks
+  const contentSegments = useMemo(() => {
+    if (!isAssistant) {
+      return [{ type: 'content', content: message.content }];
+    }
+
+    const thinkRegex = /<think>([\s\S]*?)<\/think>/g;
+    const webSearchRegex = /<WebSearch>([\s\S]*?)<\/WebSearch>/g;
+    const segments = [];
+    let lastIndex = 0;
+    
+    // Find all matches (both thinking and websearch) with their positions
+    const allMatches = [];
+    
+    let thinkMatch;
+    while ((thinkMatch = thinkRegex.exec(message.content)) !== null) {
+      allMatches.push({
+        type: 'thinking',
+        index: thinkMatch.index,
+        length: thinkMatch[0].length,
+        content: thinkMatch[1].trim(),
+        isComplete: true
+      });
+    }
+    
+    let webSearchMatch;
+    while ((webSearchMatch = webSearchRegex.exec(message.content)) !== null) {
+      allMatches.push({
+        type: 'websearch',
+        index: webSearchMatch.index,
+        length: webSearchMatch[0].length,
+        content: webSearchMatch[1].trim(),
+        isComplete: true
+      });
+    }
+    
+    // Sort matches by position
+    allMatches.sort((a, b) => a.index - b.index);
+    
+    // Process matches in order
+    for (const match of allMatches) {
+      // Add regular content before this block (if any)
+      if (match.index > lastIndex) {
+        const regularContent = message.content.slice(lastIndex, match.index);
+        if (regularContent.trim()) {
+          segments.push({
+            type: 'content',
+            content: regularContent
+          });
+        }
+      }
+      
+      // Add the block
+      segments.push(match);
+      
+      lastIndex = match.index + match.length;
+    }
+    
+    // Check for incomplete/streaming blocks (has opening tag but no closing tag)
+    const remainingContent = message.content.slice(lastIndex);
+    const incompleteThinkMatch = remainingContent.match(/<think>([\s\S]*)$/);
+    const incompleteWebSearchMatch = remainingContent.match(/<WebSearch>([\s\S]*)$/);
+    
+    // Determine which incomplete block comes first (if any)
+    let incompleteMatch = null;
+    let incompleteType = null;
+    
+    if (incompleteThinkMatch && incompleteWebSearchMatch) {
+      if (incompleteThinkMatch.index < incompleteWebSearchMatch.index) {
+        incompleteMatch = incompleteThinkMatch;
+        incompleteType = 'thinking';
+      } else {
+        incompleteMatch = incompleteWebSearchMatch;
+        incompleteType = 'websearch';
+      }
+    } else if (incompleteThinkMatch) {
+      incompleteMatch = incompleteThinkMatch;
+      incompleteType = 'thinking';
+    } else if (incompleteWebSearchMatch) {
+      incompleteMatch = incompleteWebSearchMatch;
+      incompleteType = 'websearch';
+    }
+    
+    if (incompleteMatch && !message.isComplete) {
+      // Add content before the incomplete tag (if any)
+      const contentBeforeIncomplete = remainingContent.slice(0, incompleteMatch.index);
+      if (contentBeforeIncomplete.trim()) {
+        segments.push({
+          type: 'content',
+          content: contentBeforeIncomplete
+        });
+      }
+      
+      // Add the incomplete block
+      segments.push({
+        type: incompleteType,
+        content: incompleteMatch[1].trim(),
+        isComplete: false
+      });
+    } else if (remainingContent.trim()) {
+      // Add remaining regular content after last block (if any)
+      segments.push({
+        type: 'content',
+        content: remainingContent
+      });
+    }
+
+    return segments;
+  }, [message.content, isAssistant, message.isComplete]);
+  
+  const hasThinkingBlocks = useMemo(() => {
+    return contentSegments.some(seg => seg.type === 'thinking');
+  }, [contentSegments]);
+  
+  const hasWebSearchBlocks = useMemo(() => {
+    return contentSegments.some(seg => seg.type === 'websearch');
+  }, [contentSegments]);
+
+  const textDirection = useMemo(() => {
+    // Get direction from first content segment
+    const firstContent = contentSegments.find(seg => seg.type === 'content');
+    return firstContent ? getTextDirection(firstContent.content) : 'ltr';
+  }, [contentSegments]);
+  
+  const handleCopyClick = useCallback(() => {
+    if (hasThinkingBlocks || hasWebSearchBlocks) {
+      // If there are thinking or websearch blocks, copy without them
+      const contentOnly = contentSegments
+        .filter(seg => seg.type === 'content')
+        .map(seg => seg.content)
+        .join('');
+      navigator.clipboard.writeText(contentOnly);
+    } else {
+      // No special blocks, just copy everything
+      navigator.clipboard.writeText(message.content);
+    }
+  }, [contentSegments, hasThinkingBlocks, hasWebSearchBlocks, message.content]);
+
+  const handleCopyDropdownClick = useCallback((event) => {
+    event.stopPropagation();
+    setCopyMenuAnchor(event.currentTarget);
+  }, []);
+
+  const handleCloseCopyMenu = useCallback(() => {
+    setCopyMenuAnchor(null);
+  }, []);
+
+  const handleCopyWithThinking = useCallback(() => {
     navigator.clipboard.writeText(message.content);
-  }, [message]);
+    setCopyMenuAnchor(null);
+  }, [message.content]);
 
   const handleBranch = useCallback(() => {
     onForkChat(message.id);
@@ -67,6 +231,10 @@ const ChatMessage = ({
   const handleRegenerateDropdownClick = useCallback((event) => {
     event.stopPropagation();
     setRegenerateMenuAnchor(event.currentTarget);
+  }, []);
+
+  const handleCloseRegenerateMenu = useCallback(() => {
+    setRegenerateMenuAnchor(null);
   }, []);
 
   const handleRegenerate = useCallback((modelName, messageId) => {
@@ -93,10 +261,6 @@ const ChatMessage = ({
     
     handleRegenerate(modelName, message.id);
   }, [handleRegenerate, message.id, onSetSelectedModel]);
-
-  const handleCloseRegenerateMenu = useCallback(() => {
-    setRegenerateMenuAnchor(null);
-  }, []);
 
   const handleConfirmRegenerate = useCallback(() => {
     if (pendingRegenerate) {
@@ -149,68 +313,60 @@ const ChatMessage = ({
               incomplete: isAssistant && !message.isComplete,
             })}
           >
-            {/* Message Content */}
-            <div className="markdown-content">
-              {isAssistant ? (
-                <ReactMarkdown
-                  remarkPlugins={[remarkGfm]}
-                  rehypePlugins={[rehypeHighlight]}
-                  components={{
-                    code: ({ inline, className, children, ...props }) => {
-                      const match = /language-(\w+)/.exec(className || '');
-                      const language = match ? match[1] : '';
-                      
-                      // Properly extract text content from children
-                      const getTextContent = (node) => {
-                        if (typeof node === 'string') return node;
-                        if (Array.isArray(node)) return node.map(getTextContent).join('');
-                        if (node && node.props && node.props.children) return getTextContent(node.props.children);
-                        return '';
-                      };
-                      
-                      const codeString = getTextContent(children).replace(/\n$/, '');
-                      
-                      return !inline && language ? (
-                        <div className="markdown-code-block">
-                          <SyntaxHighlighter
-                            style={vscDarkPlus}
-                            language={language}
-                            PreTag="div"
-                            {...props}
-                          >
-                            {codeString}
-                          </SyntaxHighlighter>
-                        </div>
-                      ) : (
-                        <code className="markdown-code-inline" {...props}>
-                          {codeString}
-                        </code>
-                      );
-                    },
-                    pre: ({ children }) => (
-                      <div className="markdown-pre">{children}</div>
-                    ),
-                    blockquote: ({ children }) => (
-                      <blockquote className="markdown-blockquote">{children}</blockquote>
-                    )
-                  }}
-                >
-                  {message.content || ''}
-                </ReactMarkdown>
-              ) : (
-                <Typography variant="body1">{message.content}</Typography>
-              )}
+            {/* Interleaved Content, Thinking Blocks, and WebSearch Blocks */}
+            {contentSegments.map((segment, index) => {
+              if (segment.type === 'thinking') {
+                return (
+                  <ThinkingBlock 
+                    key={`thinking-${index}`}
+                    content={segment.content} 
+                    isComplete={segment.isComplete}
+                  />
+                );
+              } else if (segment.type === 'websearch') {
+                return (
+                  <WebSearchBlock 
+                    key={`websearch-${index}`}
+                    urls={segment.content} 
+                    isComplete={segment.isComplete}
+                  />
+                );
+              } else {
+                return (
+                  <div key={`content-${index}`} className="markdown-content" dir={textDirection}>
+                    {isAssistant ? (
+                      <Streamdown
+                        isAnimating={!message.isComplete && index === contentSegments.length - 1}
+                        parseIncompleteMarkdown={true}
+                        remarkPlugins={[
+                          [remarkGfm, { singleTilde: false }],
+                          [remarkMath, { 
+                            singleDollarTextMath: true,
+                          }],
+                          remarkBreaks
+                        ]}
+                      >
+                        {convertLatexBrackets(segment.content) || ''}
+                      </Streamdown>
+                    ) : (
+                      <Typography variant="body1" style={{ whiteSpace: 'pre-wrap' }}>
+                        {segment.content}
+                      </Typography>
+                    )}
+                  </div>
+                );
+              }
+            })}
 
-              {/* Loading indicator for incomplete assistant messages */}
-              {isAssistant && !message.isComplete && (
-                <Box className="loading-indicator">
-                  <CircularProgress size={16} className="spinner" />
-                  <Typography variant="caption" color="text.secondary">
-                    Thinking...
-                  </Typography>
-                </Box>
-              )}
-            </div>
+            {/* Loading indicator for incomplete assistant messages */}
+            {isAssistant && !message.isComplete && (
+              <Box className="loading-indicator">
+                <CircularProgress size={16} className="spinner" />
+                <Typography variant="caption" color="text.secondary">
+                  Thinking...
+                </Typography>
+              </Box>
+            )}
 
             {/* Error Display */}
             {message.finishError && (
@@ -245,12 +401,43 @@ const ChatMessage = ({
               
               {/* Action Icons for Assistant Messages */}
               {isAssistant && message.isComplete && (
-                <Box className={lcn("message-actions", {"force-visible": Boolean(regenerateMenuAnchor)})}>
-                  <Tooltip title="Copy">
-                    <IconButton size="small" onClick={handleCopy}>
+                <Box className={lcn("message-actions", {"force-visible": Boolean(regenerateMenuAnchor) || Boolean(copyMenuAnchor)})}>
+                  <Tooltip title={(hasThinkingBlocks || hasWebSearchBlocks) ? "Copy (content only)" : "Copy"}>
+                    <IconButton size="small" onClick={handleCopyClick}>
                       <ContentCopy fontSize="small" />
                     </IconButton>
                   </Tooltip>
+                  {(hasThinkingBlocks || hasWebSearchBlocks) && (
+                    <>
+                      <IconButton 
+                        size="small" 
+                        onClick={handleCopyDropdownClick}
+                        className="copy-dropdown"
+                      >
+                        <KeyboardArrowDown fontSize="small" />
+                      </IconButton>
+                      
+                      {/* Copy Menu */}
+                      <Menu
+                        anchorEl={copyMenuAnchor}
+                        open={Boolean(copyMenuAnchor)}
+                        onClose={handleCloseCopyMenu}
+                        anchorOrigin={{
+                          vertical: 'top',
+                          horizontal: 'left',
+                        }}
+                        transformOrigin={{
+                          vertical: 'bottom',
+                          horizontal: 'left',
+                        }}
+                      >
+                        <MenuItem onClick={handleCopyWithThinking}>
+                          <Typography variant="body2">Copy everything</Typography>
+                        </MenuItem>
+                      </Menu>
+                    </>
+                  )}
+                  
                   <Tooltip title="Branch">
                     <IconButton size="small" onClick={handleBranch}>
                       <CallSplit fontSize="small" />
@@ -345,7 +532,7 @@ ChatMessage.propTypes = {
   onSetSelectedModel: PropTypes.func,
   onRegenerateMessage: PropTypes.func,
   onForkChat: PropTypes.func,
-  isLastMessage: PropTypes.bool,
+  isLastMessage: PropTypes.bool
 };
 
 export default ChatMessage;

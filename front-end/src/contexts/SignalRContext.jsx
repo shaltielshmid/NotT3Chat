@@ -258,6 +258,19 @@ export const SignalRProvider = ({ children }) => {
     [connection, isConnected]
   );
 
+  const stopGenerating = useCallback(
+    async () => {
+      if (connection && isConnected && currentChatId.current) {
+        try {
+          await connection.invoke('StopGenerating');
+        } catch (error) {
+          console.error('Error stopping generation:', error);
+        }
+      }
+    },
+    [connection, isConnected]
+  );
+
   const initializeConnection = useCallback(() => {
     if (connection || isInitializing.current) return;
 
@@ -356,6 +369,7 @@ export const SignalRProvider = ({ children }) => {
     chooseChat,
     sendMessage,
     regenerateMessage,
+    stopGenerating,
     reconnect,
   }), [
     isConnected,
@@ -366,6 +380,7 @@ export const SignalRProvider = ({ children }) => {
     chooseChat,
     sendMessage,
     regenerateMessage,
+    stopGenerating,
     reconnect,
   ]);
 

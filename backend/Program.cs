@@ -1,25 +1,35 @@
-using LlmTornado.Chat.Models;
-using LlmTornado.Code;
 using LlmTornado;
 using LlmTornado.Chat;
+using LlmTornado.Chat.Models;
+using LlmTornado.Code;
+using LlmTornado.Code.Models;
+using LlmTornado.Common;
+using LlmTornado.Responses;
+using LlmTornado.Threads;
+using Microsoft.AspNetCore.Http.HttpResults;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.ModelBinding;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.AspNetCore.Identity;
-using System.Text;
-using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
-using System.ComponentModel.DataAnnotations;
-using Serilog;
+using Microsoft.VisualBasic;
 using NotT3ChatBackend.Data;
+using NotT3ChatBackend.DTOs;
+using NotT3ChatBackend.Endpoints;
+using NotT3ChatBackend.Hubs;
 using NotT3ChatBackend.Models;
 using NotT3ChatBackend.Services;
-using NotT3ChatBackend.Hubs;
-using NotT3ChatBackend.DTOs;
-using Microsoft.AspNetCore.Http.HttpResults;
-using NotT3ChatBackend.Endpoints;
-using LlmTornado.Code.Models;
 using NotT3ChatBackend.Utils;
-using Microsoft.AspNetCore.Mvc;
+using Serilog;
+using System;
+using System.ComponentModel;
+using System.ComponentModel.DataAnnotations;
+using System.Reflection.Metadata;
+using System.Text;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 
 // This code is staying in one file for now as an intentional experiment for .NET 10's dotnet run app.cs feature,
@@ -87,7 +97,9 @@ namespace NotT3ChatBackend {
             });
 
             builder.Services.AddSignalR();
+            builder.Services.AddHttpClient();
             builder.Services.AddSingleton<TornadoService>();
+            builder.Services.AddSingleton<ExaApiService>();
             builder.Services.AddScoped<StreamingService>();
 
             var app = builder.Build();
@@ -266,16 +278,75 @@ namespace NotT3ChatBackend.Endpoints {
 }
 
 namespace NotT3ChatBackend.Services {
+    #region Services/ExaApiService.cs
+    public class ExaApiService {
+        private readonly string? _apiKey;
+        private readonly HttpClient _httpClient;
+        public ExaApiService(IConfiguration configuration, IHttpClientFactory httpClientFactory) {
+            _apiKey = configuration["EXA_API_KEY"];
+            _httpClient = httpClientFactory.CreateClient();
+            _httpClient.DefaultRequestHeaders.Add("x-api-key", _apiKey ?? "");
+            _httpClient.BaseAddress = new Uri("https://api.exa.ai");
+        }
+
+        public bool IsEnabled => _apiKey is not null;
+
+        public async Task<List<ResultItem>?> GetResults(string query) {
+            if (!IsEnabled) return null;
+
+            try {
+                var response = await _httpClient.PostAsJsonAsync("/search", new {
+                    query,
+                    userLocation = "IL",
+                    numResults = 5,
+                    type = "fast",
+                    contents = new {
+                        text = new {
+                            maxCharacters = 3000
+                        }
+                    }
+                });
+
+                var result = await response.Content.ReadFromJsonAsync<JsonNode>();
+                return result?["results"]?.AsArray().Select(res => new ResultItem {
+                    Url = res!["url"]!.GetValue<string>(), 
+                    Text = res["text"]!.GetValue<string>()
+                }).ToList();
+            } catch {
+                return null;
+            }
+        }
+
+        public class ResultItem {
+            public required string Url { get; set; }
+            public required string Text { get; set; }
+        }
+    }
+    #endregion
+
     #region Services/TorandoService.cs
     public class TornadoService {
-        private readonly TornadoApi _api;
+        private readonly Dictionary<string, TornadoApi> _apiByModel = new();
         private readonly string[] _models;
         private readonly string? _titleModel;
         private readonly ILogger<TornadoService> _logger;
-
-        public TornadoService(ILogger<TornadoService> logger, IConfiguration configuration) {
+        private readonly ExaApiService _exaApiService;
+        private readonly List<Tool>? _tools;
+        
+        public TornadoService(ILogger<TornadoService> logger, ExaApiService exaApiService, IConfiguration configuration) {
             _logger = logger;
-            
+            _exaApiService = exaApiService;
+
+            if (_exaApiService.IsEnabled) {
+                _tools = [
+                    new Tool(async ([Description("The search query to perform.")] string query) => {
+                        // Get the results
+                        var results = await _exaApiService.GetResults(query);
+                        return results ?? [];
+                    }, "web_search", "Perform a search query on the web, and retrieve the most relevant URLs/web data.")
+                ];
+            }
+
             var providerAuthentications = new List<ProviderAuthentication>();
             var allModels = new List<string>();
             foreach (var (configKey, provider, vendorProvider) in new (string, LLmProviders, BaseVendorModelProvider)[] {
@@ -320,13 +391,18 @@ namespace NotT3ChatBackend.Services {
             return [.. _models.Select(m => new ChatModelDTO(m))];
         }
 
-        public async Task InitiateConversationAsync(string model, ICollection<NotT3Message> messages, ExtendedChatStreamEventHandler handler) {
+        public async Task InitiateConversationAsync(string model, ICollection<NotT3Message> messages, CancellationToken ct, ExtendedChatStreamEventHandler handler) {
             _logger.LogInformation("Initiating conversation with model: {Model}, message count: {MessageCount}", model, messages.Count);
             try {
-                var convo = _api.Chat.CreateConversation(model);
+                var convo = _apiByModel[model].Chat.CreateConversation(new ChatRequest {
+                    Model = new ChatModel(model),
+                    Tools = _tools
+                });
                 foreach (var msg in messages)
                     convo.AppendMessage(msg.Role, msg.Content);
-                await convo.StreamResponseRich(handler);
+
+                handler.AfterFunctionCallsResolvedHandler = async (results, handler) => { await convo.StreamResponseRich(handler, ct); };
+                await convo.StreamResponseRich(handler, ct);
                 _logger.LogInformation("Conversation streaming completed");
             }
             catch (Exception ex) {
@@ -377,18 +453,54 @@ namespace NotT3ChatBackend.Services {
             var hubContext = scope.ServiceProvider.GetRequiredService<IHubContext<ChatHub>>();
             var convo = await dbContext.GetConversationAsync(convoId, user);
 
-            await _tornadoService.InitiateConversationAsync(model, messages, new ExtendedChatStreamEventHandler() {
-                MessagePartHandler = async (messagePart) => {
-                    await streamingMessage.Semaphore.WaitAsync();
-                    try {
-                        streamingMessage.SbMessage.Append(messagePart.Text);
-                        await hubContext.Clients.Group(convoId).SendAsync("NewAssistantPart", convoId, messagePart.Text);
-                    }
-                    finally {
-                        streamingMessage.Semaphore.Release();
-                    }
+            bool prevWasReasoning = false;
+            async Task SendNewContent(string content, bool isReasoning) {
+                if (isReasoning && !prevWasReasoning) content = "<think>" + content;
+                if (!isReasoning && prevWasReasoning) content = "</think>" + content;
+                prevWasReasoning = isReasoning;
+
+                await streamingMessage.Semaphore.WaitAsync();
+                try {
+                    streamingMessage.SbMessage.Append(content);
+                    await hubContext.Clients.Group(convoId).SendAsync("NewAssistantPart", convoId, content);
+                }
+                finally {
+                    streamingMessage.Semaphore.Release();
+                }
+            }
+
+            ExtendedChatStreamEventHandler? handler = null;
+            handler = new ExtendedChatStreamEventHandler() {
+                ReasoningTokenHandler = async (messagePart) => {
+                    if (messagePart.Content is null) return;
+                    string content = messagePart.Content;
+                    await SendNewContent(content, true);
                 },
+                MessagePartHandler = async (messagePart) => {
+                    if (string.IsNullOrEmpty(messagePart.Text)) return;
+                    string messageText = messagePart.Text;
+                    await SendNewContent(messageText, false);
+                },
+                FunctionCallHandler = async (fns) => {
+                    foreach (var fn in fns) {
+                        if (fn.Name == "web_search" && fn.Result is not null) {
+                            var results = JsonSerializer.Deserialize<JsonNode>(JsonSerializer.Deserialize<string>(fn.Result.Content)!)!
+                                                ["Result"].Deserialize<List<ExaApiService.ResultItem>>();
+                            await SendNewContent($"<WebSearch>{JsonSerializer.Serialize(results.Select(res => res.Url).ToList())}</WebSearch>", false);
+                        }
+                    }
+                    await ValueTask.CompletedTask;
+                },
+                ToolCallsHandler = ToolCallsHandler.ContinueConversation,
                 OnFinished = async (data) => {
+                    if (prevWasReasoning) {
+                        await SendNewContent("", false);
+                        if (handler?.AfterFunctionCallsResolvedHandler is not null) {
+                            await handler.AfterFunctionCallsResolvedHandler.Invoke(null, handler);
+                            return;
+                        }
+                    }
+
                     _logger.LogInformation("Assistant message completed for conversation: {ConversationId}", convoId);
                     await hubContext.Clients.Group(convoId).SendAsync("EndAssistantMessage", convoId, null);
 
@@ -411,7 +523,9 @@ namespace NotT3ChatBackend.Services {
                     await dbContext.SaveChangesAsync();
                     _memoryCache.Remove(convoId);
                 }
-            });
+            };
+
+            await _tornadoService.InitiateConversationAsync(model, messages, streamingMessage.Ct.Token, handler);
         }
 
         internal async Task StreamTitle(string convoId, NotT3Message userMsg, NotT3User user) {
@@ -501,6 +615,33 @@ namespace NotT3ChatBackend.Hubs {
             }
 
             await base.OnConnectedAsync();
+        }
+        public async Task StopGenerating() {
+            if (!Context.Items.TryGetValue(Context.ConnectionId, out var convoIdObj)) {
+                _logger.LogWarning("User attempted to stop a message without being in a conversation group");
+                return;
+            }
+
+            string convoId = convoIdObj!.ToString()!;
+            _logger.LogInformation("Stop generation received for conversation: {ConversationId}", convoId);
+
+            var user = await _userManager.GetUserAsync(Context.User ?? throw new NotImplementedException());
+            var convo = await _dbContext.GetConversationAsync(convoId, user!);
+            if (!convo.IsStreaming) {
+                _logger.LogWarning("Attempted to stop conversation which wasn't streaming, ignoring: {ConversationId}", convoId);
+                return;
+            }
+
+            _logger.LogInformation("Conversation is currently streaming, checking for existing message");
+            if (_memoryCache.TryGetValue(convoId, out StreamingMessage? currentMsg)) {
+                await currentMsg!.Semaphore.WaitAsync();
+                try {
+                    currentMsg.Ct.Cancel();
+                }
+                finally {
+                    currentMsg.Semaphore.Release();
+                }                
+            }
         }
 
         public async Task NewMessage(string model, string message) {
@@ -603,22 +744,27 @@ namespace NotT3ChatBackend.Hubs {
 
             // Zero out the contents of the last message
             _logger.LogInformation("Zeroing out content of last message with ID: {MessageId}", lastMessage.Id);
-            lastMessage.Content = "";
-            lastMessage.FinishError = null;
-            lastMessage.ChatModel = model;
-            lastMessage.Timestamp = DateTime.UtcNow;
-
+            var assistantMsg = new NotT3Message() {
+                Id = lastMessage.Id,
+                Index = convo.Messages.Count,
+                Role = ChatMessageRoles.Assistant,
+                Content = "",
+                Timestamp = DateTime.UtcNow,
+                ConversationId = convo.Id,
+                UserId = user!.Id,
+                ChatModel = model
+            };
             convo.IsStreaming = true;
             await _dbContext.SaveChangesAsync();
             _logger.LogInformation("Conversation marked as streaming and changes saved");
-            await GenerateAssistantMessage(model, convoId, convo, lastMessage, user!);
+            await GenerateAssistantMessage(model, convoId, convo, assistantMsg, user!);
         }
 
         private async Task GenerateAssistantMessage(string model, string convoId, NotT3Conversation convo, NotT3Message assistantMsg, NotT3User user) {
             await Clients.Group(convoId).SendAsync("BeginAssistantMessage", convoId, new NotT3MessageDTO(assistantMsg));
             _logger.LogInformation("Starting assistant response with ID: {ResponseId}", assistantMsg.Id);
 
-            var streamingMessage = new StreamingMessage(new StringBuilder(),assistantMsg, new SemaphoreSlim(1));
+            var streamingMessage = new StreamingMessage(new StringBuilder(),assistantMsg, new SemaphoreSlim(1), new CancellationTokenSource());
             _memoryCache.Set(convoId, streamingMessage, TimeSpan.FromMinutes(5)); // Max expiration of 5 minutes
 
             // Create our conversation and sync
@@ -742,6 +888,6 @@ namespace NotT3ChatBackend.Utils {
     #endregion
 
     #region Utils/StreamingMessage.cs
-    public record StreamingMessage(StringBuilder SbMessage, NotT3Message Message, SemaphoreSlim Semaphore);
+    public record StreamingMessage(StringBuilder SbMessage, NotT3Message Message, SemaphoreSlim Semaphore, CancellationTokenSource Ct);
     #endregion
 }
