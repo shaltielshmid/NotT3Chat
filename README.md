@@ -129,9 +129,9 @@ Here's a non-exhaustive list of what's planned when I get around to it:
 
 - [ ] Attachments (files, images)
 - [x] Better syntax highlighting for code blocks
-- [ ] Even better syntax highlighting, with copy buttons
+- [x] Even better syntax highlighting, with copy buttons
 - [x] Branching conversations
-- [ ] Tools (like web search)
+- [x] Tools (like web search)
 - [ ] Image generation
 - [ ] Chat sharing via public links
 - [ ] Bring Your Own Key (BYOK) for API providers
@@ -140,8 +140,8 @@ Here's a non-exhaustive list of what's planned when I get around to it:
 - [ ] Delete individual messages?
 - [x] Intelligent, automatic naming for new chats
 - [ ] Search through threads
-- [ ] Make it prettier?
-- [ ] Thinking models
+- [x] Make it prettier?
+- [x] Thinking models
 
 ---
 
