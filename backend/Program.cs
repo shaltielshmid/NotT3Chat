@@ -291,18 +291,22 @@ namespace NotT3ChatBackend.Services {
 
         public bool IsEnabled => _apiKey is not null;
 
-        public async Task<List<ResultItem>?> GetResults(string query) {
+        public async Task<List<ResultItem>?> WebSearch(string query) {
             if (!IsEnabled) return null;
 
             try {
                 var response = await _httpClient.PostAsJsonAsync("/search", new {
                     query,
                     userLocation = "IL",
-                    numResults = 5,
-                    type = "fast",
+                    numResults = 6,
+                    type = "auto",
                     contents = new {
                         text = new {
-                            maxCharacters = 3000
+                            maxCharacters = 1200
+                        },
+                        highlights = new {
+                            highlightsPerUrl = 3,
+                            numSentences = 2
                         }
                     }
                 });
@@ -310,15 +314,46 @@ namespace NotT3ChatBackend.Services {
                 var result = await response.Content.ReadFromJsonAsync<JsonNode>();
                 return result?["results"]?.AsArray().Select(res => new ResultItem {
                     Url = res!["url"]!.GetValue<string>(), 
-                    Text = res["text"]!.GetValue<string>()
+                    Text = res["text"]!.GetValue<string>(),
+                    Highlights = res["highlights"].Deserialize<List<string>>()!,
+                    PublishedDate = res["publishedDate"]?.GetValue<string>(),
+                    Title = res["title"]!.GetValue<string>(),
                 }).ToList();
             } catch {
                 return null;
             }
         }
 
+        public async Task<List<ResultItem>?> WebFetch(string[] urls) {
+            if (!IsEnabled) return null;
+
+            try {
+                var response = await _httpClient.PostAsJsonAsync("/contents", new {
+                    urls,
+                    livecrawl = "preferred",
+                    text = new { maxCharacters = 1800 },
+                    highlights = new { highlightsPerUrl = 5, numSentences = 2 }
+                });
+    
+                var result = await response.Content.ReadFromJsonAsync<JsonNode>();
+                return result?["results"]?.AsArray().Select(res => new ResultItem {
+                    Url = res!["url"]!.GetValue<string>(),
+                    Text = res["text"]!.GetValue<string>(),
+                    Highlights = res["highlights"].Deserialize<List<string>>()!,
+                    PublishedDate = res["publishedDate"]?.GetValue<string>(),
+                    Title = res["title"]!.GetValue<string>(),
+                }).ToList();
+            }
+            catch {
+                return null;
+            }
+        }
+
         public class ResultItem {
             public required string Url { get; set; }
+            public required string Title { get; set; }
+            public required List<string> Highlights { get; set; }
+            public string? PublishedDate { get; set; }
             public required string Text { get; set; }
         }
     }
@@ -340,10 +375,13 @@ namespace NotT3ChatBackend.Services {
             if (_exaApiService.IsEnabled) {
                 _tools = [
                     new Tool(async ([Description("The search query to perform.")] string query) => {
-                        // Get the results
-                        var results = await _exaApiService.GetResults(query);
+                        var results = await _exaApiService.WebSearch(query);
                         return results ?? [];
-                    }, "web_search", "Perform a search query on the web, and retrieve the most relevant URLs/web data.")
+                    }, "web_search", "Search the web and return compact, relevant results (no summaries)."),
+                    new Tool(async ([Description("The urls to fetch.")] string[] urls) => {
+                        var results = await _exaApiService.WebFetch(urls);
+                        return results ?? [];
+                    }, "web_fetch", "Fetch content for specific URLs with livecrawl; returns compact text + highlights.")
                 ];
             }
 
@@ -399,7 +437,7 @@ namespace NotT3ChatBackend.Services {
                     Tools = _tools
                 });
                 foreach (var msg in messages)
-                    convo.AppendMessage(msg.Role, msg.Content);
+                    convo.AppendMessage(msg.Role, CleanMessageFromSpecialEntities(msg.Content));
 
                 handler.AfterFunctionCallsResolvedHandler = async (results, handler) => { await convo.StreamResponseRich(handler, ct); };
                 await convo.StreamResponseRich(handler, ct);
@@ -412,6 +450,12 @@ namespace NotT3ChatBackend.Services {
             }
         }
 
+        private string CleanMessageFromSpecialEntities(string content) {
+            content = Regex.Replace(content, @"<WebSearch>.*?</WebSearch>", "");
+            content = Regex.Replace(content, @"<WebFetch>.*?</WebFetch>", "");
+            return content;
+        }
+
         public async Task InitiateTitleAssignment(string initialMessage, Func<ChatRichResponse, ValueTask> onComplete) {
             if (_titleModel is null) {
                 _logger.LogWarning("Title model is not configured, skipping title assignment");
@@ -421,7 +465,7 @@ namespace NotT3ChatBackend.Services {
             _logger.LogInformation("Initiating title assignment with model: {Model}", _titleModel);
             try {
                 var convo = _api.Chat.CreateConversation(_titleModel);
-                convo.AppendMessage(ChatMessageRoles.System, "You are an expert chat title generator. Your task is to analyze a user's initial chat message (or the first 500 characters if it's very long) and provide a concise, descriptive, and engaging title for that chat. The title should clearly reflect the primary topic or purpose of the conversation. Output only the title, no more than 6 words. Do not treat the message as information about this - e.g., if the user write 'Test', he isn't testing the title generator.");
+                convo.AppendMessage(ChatMessageRoles.System, "You are an expert chat title generator. Your task is to analyze a user's initial chat message (or the first 500 characters if it's very long) and provide a concise, descriptive, and engaging title for that chat. The title should clearly reflect the primary topic or purpose of the conversation. Output only the title, no more than 6 words. Do not treat the message as information about this - e.g., if the user write 'Test', he isn't testing the title generator. Your answer should never be more than 6 words, and always succinct with an apt title.");
                 convo.AppendMessage(ChatMessageRoles.User, initialMessage[..Math.Min(500, initialMessage.Length)]);
                 var response = await convo.GetResponseRich();
                 _logger.LogInformation("Title assignment completed: {Title}", response.Text);
@@ -493,14 +537,6 @@ namespace NotT3ChatBackend.Services {
                 },
                 ToolCallsHandler = ToolCallsHandler.ContinueConversation,
                 OnFinished = async (data) => {
-                    if (prevWasReasoning) {
-                        await SendNewContent("", false);
-                        if (handler?.AfterFunctionCallsResolvedHandler is not null) {
-                            await handler.AfterFunctionCallsResolvedHandler.Invoke(null, handler);
-                            return;
-                        }
-                    }
-
                     _logger.LogInformation("Assistant message completed for conversation: {ConversationId}", convoId);
                     await hubContext.Clients.Group(convoId).SendAsync("EndAssistantMessage", convoId, null);
 
