@@ -29,15 +29,23 @@ export const formatDate = (dateString) => {
 export const isFirstWordEnglish = (text) => {
   if (!text || typeof text !== 'string') return false;
   
-  // Trim and get the first word
+  // Trim and get words
   const trimmed = text.trim();
-  const firstWord = trimmed.split(/\s+/)[0];
+  const words = trimmed.split(/\s+/);
   
-  if (!firstWord) return false;
+  // Find the first word that contains letters
+  for (const word of words) {
+    if (/[a-zA-Z]/.test(word)) {
+      // Check if it contains Latin letters (English)
+      return true;
+    }
+    if (/[\u0590-\u05FF\u0600-\u06FF\u0700-\u074F]/.test(word)) {
+      // Contains Hebrew, Arabic, or Syriac letters (RTL scripts)
+      return false;
+    }
+  }
   
-  // Check if the first character is a Latin letter (English)
-  const firstChar = firstWord.charAt(0);
-  return /[a-zA-Z]/.test(firstChar);
+  return false;
 };
 
 /**

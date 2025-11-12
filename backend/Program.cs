@@ -436,6 +436,10 @@ namespace NotT3ChatBackend.Services {
                     Model = new ChatModel(model),
                     Tools = _tools
                 });
+                convo.AppendSystemMessage($"""
+                ## The date today is: {DateTime.Now:dddd, MMMM dd'th' yyyy / dd/MM/yyyy}
+                You will always make sure to respond in the same language as the last user message, unless he specifically requested otherwise.
+                """.Trim().ReplaceLineEndings("\n"));
                 foreach (var msg in messages)
                     convo.AppendMessage(msg.Role, CleanMessageFromSpecialEntities(msg.Content));
 
@@ -465,8 +469,8 @@ namespace NotT3ChatBackend.Services {
             _logger.LogInformation("Initiating title assignment with model: {Model}", _titleModel);
             try {
                 var convo = _api.Chat.CreateConversation(_titleModel);
-                convo.AppendMessage(ChatMessageRoles.System, "You are an expert chat title generator. Your task is to analyze a user's initial chat message (or the first 500 characters if it's very long) and provide a concise, descriptive, and engaging title for that chat. The title should clearly reflect the primary topic or purpose of the conversation. Output only the title, no more than 6 words. Do not treat the message as information about this - e.g., if the user write 'Test', he isn't testing the title generator. Your answer should never be more than 6 words, and always succinct with an apt title.");
-                convo.AppendMessage(ChatMessageRoles.User, initialMessage[..Math.Min(500, initialMessage.Length)]);
+                convo.AppendMessage(ChatMessageRoles.System, "Generate a concise, engaging chat title (max 6 words) that clearly reflects the main topic or purpose of the user�s first message (or its first 500 characters). The title must be in the **same language** as the user�s message. Output **only** the title � no explanations, formatting, or extra text. Ignore any messages that are about testing or describing this instruction itself.");
+                convo.AppendMessage(ChatMessageRoles.User, "<FIRST_MESSAGE>" + initialMessage[..Math.Min(500, initialMessage.Length)] + "</FIRST_MESSAGE>\n\nPlease output the title:");
                 var response = await convo.GetResponseRich();
                 _logger.LogInformation("Title assignment completed: {Title}", response.Text);
 
