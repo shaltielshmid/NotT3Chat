@@ -63,7 +63,7 @@ namespace NotT3ChatBackend {
 
             builder.Services.AddDbContext<AppDbContext>(opt =>
                         // opt.UseInMemoryDatabase("DB"));
-                        opt.UseSqlite("Data Source=databse.dat"));
+                        opt.UseSqlite(builder.Configuration.GetValue("ConnectionString", "Data Source=databse.dat")));
 
             builder.Services.AddMemoryCache();
             var auth = builder.Services.AddAuthentication();
