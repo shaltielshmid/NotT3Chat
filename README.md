@@ -1,4 +1,4 @@
-﻿# NotT3Chat: The C# Answer to the T3 Stack
+# NotT3Chat: The C# Answer to the T3 Stack
 
  <img src="stuff/logo.png" width="350" />
 
@@ -24,11 +24,12 @@ Why build another chat app? Two reasons:
 
 This is far from just a "hello world" chat. We've packed in some serious features:
 
-*   **🤖 Multi-LLM Support:** Seamlessly switch between different models and providers (currently OpenAI and Google, but the rest are just one line of code away).
+*   **🤖 Multi-LLM Support:** Seamlessly switch between different models and providers (OpenAI, Google, Anthropic, Groq, DeepSeek, and more). Add custom providers via config.
 *   **⚡ Blazing-Fast Real-Time Chat:** Built with the magic of **[SignalR](https://dotnet.microsoft.com/apps/aspnet/signalr)**, messages stream in real-time.
 *   **🔄 Advanced Stream Resumption:** Did you close your browser tab mid-stream? No problem. Re-open the chat, and the stream will pick up right where it left off.
 *   **🤝 Multi-Session Sync:** Open the same chat in multiple windows or on different devices, and watch the messages stream in perfect sync across all of them.
-*   **🔐 Authentication:** A login system to keep your chats private.
+*   **🔐 Flexible Authentication:** Email/password login and/or Google OAuth. Configure what you need.
+*   **🎨 Customizable Branding:** Custom fonts, logos, titles, and icons via environment variables.
 *   **📜 Chat History:** All your conversations are saved and can be revisited anytime.
 
 ## 🛠️ Tech Stack & How It Was Built
@@ -67,19 +68,42 @@ The backend runs on port `http://localhost:5128` by default in debug mode.
 
 **Configuration:**
 
-The backend reads the configuration from the environment variables, here are the options:
+The backend reads configuration from environment variables and `appsettings.json`:
 
 ```bash
-# Options are GOOGLE_API_KEY, OAI_API_KEY, OPENROUTER_API_KEY, ANTHROPIC_API_KEY, COHERE_API_KEY, GROQ_API_KEY, DEEPSEEK_API_KEY, MISTRAL_API_KEY, XAI_API_KEY, PERPLEXITY_API_KEY
-# You can put in multiple options
-export XXXXXX_API_KEY=...
+# LLM Provider API Keys
+# Options: GOOGLE_API_KEY, OAI_API_KEY, OPENROUTER_API_KEY, ANTHROPIC_API_KEY, COHERE_API_KEY, GROQ_API_KEY, DEEPSEEK_API_KEY, MISTRAL_API_KEY, XAI_API_KEY, PERPLEXITY_API_KEY
+export XXXXXX_API_KEY=... # or use dotnet user-secrets set, better
 
-# Optional: If you don't specify this, it will display all the available models from the providers that you specified an API key for
+# Optional: Filter which models to display
 export NOTT3CHAT_MODELS_FILTER=gpt-4o-mini,gemini-2.0-flash-001,gemini-2.0-flash-lite-001
 
-# Optional: Specify which model should be used for generating titles for chats. Default to gemini-2.0-flash-lite-001
-# If the specified model doesn't have an API key matching, then it will just assign "New Chat" to all models
+# Optional: Model for chat title generation (default: gemini-2.0-flash-lite-001)
 export NOTT3CHAT_TITLE_MODEL=gemini-2.0-flash-lite-001
+
+# Optional: Google OAuth (requires Google Cloud Console setup)
+dotnet user-secrets set "Authentication:Google:ClientId" "your-client-id"
+dotnet user-secrets set "Authentication:Google:ClientSecret" "your-client-secret"
+```
+
+Edit `appsettings.json` for additional settings:
+
+```json
+{
+  "Authentication": {
+    "UseGoogle": false,      // Enable Google OAuth login
+    "UseIdentity": true      // Enable email/password login
+  },
+  "CustomProviders": [       // Add custom LLM providers
+    {
+      "Name": "MyProvider",
+      "BaseUrl": "https://api.example.com/v1",
+      "ApiKey": "your-key", // can also be specific "CustomProviders:0:ApiKey"
+      "Models": ["model-name-1", "model-name-2"]
+    }
+  ],
+  "FrontEndUrl": "http://localhost:5173"  // For OAuth redirects
+}
 ```
 
 **Debug Mode:**
@@ -119,7 +143,27 @@ npm install
 # Make sure this URL matches your backend's URL
 VITE_API_URL=http://localhost:5128 npm run dev
 ```
-> You can also set `VITE_API_URL` in a `.env` file inside the `front-end` directory.
+
+**Frontend Configuration:**
+
+Create a `.env` file in the `front-end` directory with these optional settings:
+
+```bash
+# Required: Backend API URL
+VITE_API_URL=http://localhost:5128
+
+# Optional: Custom branding
+VITE_APP_TITLE=NotT3Chat
+VITE_APP_SLOGAN=Your AI Chat Companion
+VITE_CUSTOM_FONT_URL=https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap
+VITE_CUSTOM_FONT_FAMILY=Inter
+VITE_CUSTOM_ASSISTANT_ICON_URL=https://example.com/icon.png
+VITE_CUSTOM_PROVIDER_FALLBACK_ICON_URL=https://example.com/provider-icon.png
+
+# Optional: Authentication methods (defaults to true for identity, false for google)
+VITE_USE_IDENTITY_AUTH=true
+VITE_USE_GOOGLE_AUTH=false
+```
 
 ---
 

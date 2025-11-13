@@ -10,12 +10,16 @@ import {
   AppBar,
   Toolbar,
   Chip,
+  IconButton,
+  useMediaQuery,
+  useTheme,
 } from '@mui/material';
 import {
   Send as SendIcon,
   ExitToApp as LogoutIcon,
   Refresh as RefreshIcon,
   Stop as StopIcon,
+  Menu as MenuIcon,
 } from '@mui/icons-material';
 import { useSignalR } from '../contexts/SignalRContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -32,12 +36,15 @@ const ChatRoom = () => {
   const [isCreatingChat, setIsCreatingChat] = useState(false);
   const [pendingMessage, setPendingMessage] = useState('');
   const [selectedModel, setSelectedModel] = useState('');
+  const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
   const messagesEndRef = useRef(null);
   const inputDirection = useMemo(() => getTextDirection(messageInput), [messageInput]);
   const { logout } = useAuth();
   const { addNewChat, chats, hasLoaded } = useChats();
   const { chatId } = useParams();
   const navigate = useNavigate();
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
   const activeChat = useMemo(() => chats.find(c => c.id == chatId), [chatId, chats]);
   
@@ -157,21 +164,43 @@ const ChatRoom = () => {
   }, [logout]);
 
   const handleChatSelect = useCallback(
-    (selectedChatId) => {
+    async (selectedChatId) => {
       if (selectedChatId) {
         navigate(`/chat/${selectedChatId}`);
       } else {
         navigate('/chat');
       }
+      // Close mobile drawer when selecting a chat
+      if (isMobile) {
+        setMobileDrawerOpen(false);
+      }
     },
-    [navigate]
+    [navigate, isMobile]
   );
+
+  const handleDrawerToggle = useCallback(() => {
+    setMobileDrawerOpen(prev => !prev);
+  }, []);
+
+  const handleDrawerClose = useCallback(() => {
+    setMobileDrawerOpen(false);
+  }, []);
 
   return (
     <div className="chat-room">
       <Box className="chat-container">
         <AppBar position="static">
           <Toolbar>
+            {isMobile && (
+              <IconButton
+                color="inherit"
+                edge="start"
+                onClick={handleDrawerToggle}
+                sx={{ mr: 2 }}
+              >
+                <MenuIcon />
+              </IconButton>
+            )}
             <Typography variant="h6" component="div" className="app-bar-title">
               {chatId && activeChat ? activeChat.title : 'New Chat'}
             </Typography>
@@ -345,6 +374,8 @@ const ChatRoom = () => {
         <ChatSidebar
           onChatSelect={handleChatSelect}
           currentChatId={chatId}
+          mobileOpen={mobileDrawerOpen}
+          onMobileClose={handleDrawerClose}
         />
       </Box>
           </div>

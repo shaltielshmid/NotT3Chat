@@ -13,18 +13,23 @@ import {
   Divider,
   CircularProgress,
   Alert,
+  useMediaQuery,
+  useTheme,
 } from '@mui/material';
 import {
   Add as AddIcon,
   Chat as ChatIcon,
   Delete as DeleteIcon,
+  Close as CloseIcon,
 } from '@mui/icons-material';
 import { useChats } from '../contexts/ChatContext';
 import { formatDate } from '../extra/utils';
 import './ChatSidebar.css';
 
-const ChatSidebar = ({ onChatSelect, currentChatId }) => {
+const ChatSidebar = ({ onChatSelect, currentChatId, mobileOpen, onMobileClose }) => {
   const { chats, loading, error, hasLoaded, loadChats, deleteChat } = useChats();
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
   // Load chats once when component mounts if not already loaded
   useEffect(() => {
@@ -68,6 +73,11 @@ const ChatSidebar = ({ onChatSelect, currentChatId }) => {
             <IconButton onClick={loadChats} size="small" title="Refresh chats">
               <ChatIcon />
             </IconButton>
+            {isMobile && (
+              <IconButton onClick={onMobileClose} size="small" title="Close sidebar" className="close-button">
+                <CloseIcon />
+              </IconButton>
+            )}
           </Box>
         </Box>
 
@@ -144,26 +154,54 @@ const ChatSidebar = ({ onChatSelect, currentChatId }) => {
   );
 
   return (
-    <Drawer
-      variant="permanent"
-      anchor="left"
-      sx={{
-        '& .MuiDrawer-paper': {
-          boxSizing: 'border-box',
-          width: 300,
-          top: '64px',
-          height: 'calc(100vh - 64px)',
-        },
-      }}
-    >
-      {drawerContent}
-    </Drawer>
+    <>
+      {/* Desktop Drawer - Permanent */}
+      {!isMobile && (
+        <Drawer
+          variant="permanent"
+          anchor="left"
+          sx={{
+            '& .MuiDrawer-paper': {
+              boxSizing: 'border-box',
+              width: 300,
+              top: '64px',
+              height: 'calc(100vh - 64px)',
+            },
+          }}
+        >
+          {drawerContent}
+        </Drawer>
+      )}
+
+      {/* Mobile Drawer - Temporary */}
+      {isMobile && (
+        <Drawer
+          variant="temporary"
+          anchor="left"
+          open={mobileOpen}
+          onClose={onMobileClose}
+          ModalProps={{
+            keepMounted: true, // Better open performance on mobile
+          }}
+          sx={{
+            '& .MuiDrawer-paper': {
+              boxSizing: 'border-box',
+              width: 300,
+            },
+          }}
+        >
+          {drawerContent}
+        </Drawer>
+      )}
+    </>
   );
 };
 
 ChatSidebar.propTypes = {
   onChatSelect: PropTypes.func.isRequired,
   currentChatId: PropTypes.string,
+  mobileOpen: PropTypes.bool,
+  onMobileClose: PropTypes.func,
 };
 
 export default ChatSidebar;

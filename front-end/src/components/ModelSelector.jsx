@@ -31,7 +31,6 @@ const providerIcons = {
   Anthropic: <Psychology />,
   AzureOpenAi: <Cloud />,
   Cohere: <Code />,
-  Custom: <Extension />,
   Google: <Search />,
   Groq: <Speed />,
   DeepSeek: <Waves />,
@@ -56,6 +55,14 @@ const providerClasses = {
 
 const ModelSelector = ({ selectedModel, onModelChange, disabled }) => {
   const { models, loading, error } = useModels();
+  const customProviderFallbackIcon = import.meta.env.VITE_CUSTOM_PROVIDER_FALLBACK_ICON_URL;
+
+  const getFallbackIcon = () => {
+    if (customProviderFallbackIcon) {
+      return <img src={customProviderFallbackIcon} alt="Provider" style={{ width: '18px', height: '18px', objectFit: 'contain' }} />;
+    }
+    return <Extension />;
+  };
 
   useEffect(() => {
     // Set default model if none selected and models available
@@ -114,7 +121,7 @@ const ModelSelector = ({ selectedModel, onModelChange, disabled }) => {
                     [providerClasses[model.provider] || 'custom']: true,
                   })}
                 >
-                  {providerIcons[model.provider] || <Extension />}
+                  {providerIcons[model.provider] || getFallbackIcon()}
                 </Box>
                 <Typography variant="body2" className="model-name">
                   {model.name}
@@ -131,7 +138,7 @@ const ModelSelector = ({ selectedModel, onModelChange, disabled }) => {
                     [providerClasses[model.provider] || 'custom']: true,
                   })}
                 >
-                  {providerIcons[model.provider] || <Extension />}
+                  {providerIcons[model.provider] || getFallbackIcon()}
                 </Box>
                 <Box className="menu-item-content">
                   <Typography variant="body2" className="menu-item-title">

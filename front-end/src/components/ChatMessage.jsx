@@ -65,6 +65,7 @@ const ChatMessage = ({
   isLastMessage
 }) => {
   const { models } = useModels();
+  const customAssistantIcon = import.meta.env.VITE_CUSTOM_ASSISTANT_ICON_URL;
   const [regenerateMenuAnchor, setRegenerateMenuAnchor] = useState(null);
   const [copyMenuAnchor, setCopyMenuAnchor] = useState(null);
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
@@ -298,6 +299,8 @@ const ChatMessage = ({
           >
             {isUser ? (
               <Person fontSize="small" />
+            ) : customAssistantIcon ? (
+              <img src={customAssistantIcon} alt="Assistant" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }} />
             ) : (
               <SmartToy fontSize="small" />
             )}

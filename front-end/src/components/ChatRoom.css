@@ -51,6 +51,12 @@
   overflow: hidden;
 }
 
+@media (max-width: 899px) {
+  .chat-room .chat-container-inner {
+    max-width: 100vw;
+  }
+}
+
 .chat-room .chat-paper {
   flex: 1;
   display: flex;

@@ -70,6 +70,11 @@ export const AuthProvider = ({ children }) => {
     }
   }, []);
 
+  const loginWithGoogle = useCallback(() => {
+    // Redirect to backend Google OAuth endpoint
+    window.location.href = `${import.meta.env.VITE_API_URL}/login/google`;
+  }, []);
+
   useEffect(() => {
     checkAuth();
   }, [checkAuth]);
@@ -81,6 +86,7 @@ export const AuthProvider = ({ children }) => {
     logout,
     register,
     checkAuth,
+    loginWithGoogle,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import {
   BrowserRouter as Router,
   Routes,
@@ -17,6 +17,10 @@ import ChatRoom from './components/ChatRoom';
 import ProtectedRoute from './components/ProtectedRoute';
 import RegisterPage from './components/RegisterPage';
 import { setNavigate } from './services/navigationService';
+
+// Get custom font URL from environment
+const customFontUrl = import.meta.env.VITE_CUSTOM_FONT_URL;
+const customFontFamily = import.meta.env.VITE_CUSTOM_FONT_FAMILY || 'Inter';
 
 const theme = createTheme({
   palette: {
@@ -39,7 +43,7 @@ const theme = createTheme({
     },
   },
   typography: {
-    fontFamily: '"Inter", "Roboto", "Helvetica", "Arial", sans-serif',
+    fontFamily: `"${customFontFamily}", "Inter", "Roboto", "Helvetica", "Arial", sans-serif`,
   },
   components: {
     MuiButton: {
@@ -119,6 +123,16 @@ const AppRoutes = () => {
 };
 
 const App = () => {
+  // Load custom font if URL is provided
+  useEffect(() => {
+    if (customFontUrl) {
+      const link = document.createElement('link');
+      link.rel = 'stylesheet';
+      link.href = customFontUrl;
+      document.head.appendChild(link);
+    }
+  }, []);
+
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />

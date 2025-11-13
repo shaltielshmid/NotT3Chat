@@ -30,6 +30,17 @@
   min-width: min(600px, 85%);
 }
 
+@media (max-width: 899px) {
+  .chat-message .message-content.user {
+    max-width: 90%;
+  }
+
+  .chat-message .message-content.assistant {
+    max-width: 95%;
+    min-width: min(95%, 100%);
+  }
+}
+
 .chat-message .message-content.user {
   flex-direction: row-reverse;
 }
@@ -48,6 +59,14 @@
   color: white;
   flex-shrink: 0;
   margin-top: 4px;
+}
+
+@media (max-width: 899px) {
+  .chat-message .avatar {
+    width: 28px;
+    height: 28px;
+    font-size: 0.875rem;
+  }
 }
 
 .chat-message .avatar.user {
@@ -197,12 +216,27 @@
   justify-content: space-between;
   align-items: center;
   margin-top: 8px;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .chat-message .message-meta {
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 899px) {
+  .chat-message .message-footer {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  
+  .chat-message .message-actions {
+    align-self: flex-end;
+  }
 }
 
 .chat-message .model-chip {
@@ -220,6 +254,12 @@
 .chat-message .message-container:hover .message-actions,
 .chat-message .message-container .message-actions.force-visible {
   opacity: 1;
+}
+
+@media (max-width: 899px) {
+  .chat-message .message-actions {
+    opacity: 1;
+  }
 }
 
 .chat-message .message-actions .MuiIconButton-root {

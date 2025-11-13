@@ -3,17 +3,23 @@ using LlmTornado.Chat;
 using LlmTornado.Chat.Models;
 using LlmTornado.Code;
 using LlmTornado.Code.Models;
+using LlmTornado.Code.Vendor;
 using LlmTornado.Common;
 using LlmTornado.Responses;
 using LlmTornado.Threads;
+using Microsoft.AspNetCore.Antiforgery;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.Google;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Identity.Data;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.ModelBinding;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Options;
 using Microsoft.VisualBasic;
 using NotT3ChatBackend.Data;
 using NotT3ChatBackend.DTOs;
@@ -27,7 +33,9 @@ using System;
 using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
 using System.Reflection.Metadata;
+using System.Security.Claims;
 using System.Text;
+using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
@@ -41,7 +49,10 @@ namespace NotT3ChatBackend {
     public class Program {
         public static void Main(string[] args) {
             var builder = WebApplication.CreateBuilder(args);
-            
+
+            bool useGoogleAuth = builder.Configuration.GetValue<bool>("Authentication:UseGoogle", false);
+            bool useIdentityAuth = builder.Configuration.GetValue<bool>("Authentication:UseIdentity", true);
+
             // Configure Serilog
             Log.Logger = new LoggerConfiguration()
                 .WriteTo.Console()
@@ -55,7 +66,16 @@ namespace NotT3ChatBackend {
                         opt.UseSqlite("Data Source=databse.dat"));
 
             builder.Services.AddMemoryCache();
-            builder.Services.AddAuthentication();
+            var auth = builder.Services.AddAuthentication();
+            if (useGoogleAuth) {
+                auth = auth.AddGoogle(options => {
+                    options.ClientId = builder.Configuration["Authentication:Google:ClientId"]!;
+                    options.ClientSecret = builder.Configuration["Authentication:Google:ClientSecret"]!;
+                    options.SignInScheme = IdentityConstants.ExternalScheme;
+                });
+            }
+            
+
             builder.Services.AddAuthorization();
             builder.Services.AddEndpointsApiExplorer();
 
@@ -69,20 +89,23 @@ namespace NotT3ChatBackend {
                         .AllowCredentials();
                 });
             });
-
             builder.Services.AddIdentityApiEndpoints<NotT3User>()
                         .AddRoles<IdentityRole>()
                         .AddEntityFrameworkStores<AppDbContext>()
                         .AddDefaultTokenProviders();
 
             builder.Services.ConfigureApplicationCookie(options => {
-                if (builder.Environment.IsProduction()) {
-                    options.Cookie.SameSite = SameSiteMode.None;
-                    options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
-                }
+                options.Cookie.SameSite = SameSiteMode.None;
+                options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
                 options.Cookie.HttpOnly = true;
                 options.SlidingExpiration = true;
-                options.ExpireTimeSpan = TimeSpan.FromDays(1);
+                options.ExpireTimeSpan = TimeSpan.FromDays(14);
+            });
+            builder.Services.ConfigureExternalCookie(options => {
+                options.Cookie.SameSite = SameSiteMode.None;
+                options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
+                options.Cookie.HttpOnly = true;
+                options.ExpireTimeSpan = TimeSpan.FromMinutes(5);
             });
 
             builder.Services.Configure<IdentityOptions>(options => {
@@ -133,7 +156,12 @@ namespace NotT3ChatBackend {
             Log.Information("Mapping endpoints");
 
             app.MapGet("/health", () => TypedResults.Ok());
-            app.MapIdentityApi<NotT3User>();
+
+            if (useIdentityAuth)
+                app.MapIdentityApi<NotT3User>();
+            if (useGoogleAuth)
+                app.MapGoogleAuthEndpoints(useIdentityAuth);
+            
             app.MapPost("/logout", async (SignInManager<NotT3User> signInManager) => {
                 await signInManager.SignOutAsync();
                 return TypedResults.Ok();
@@ -148,6 +176,59 @@ namespace NotT3ChatBackend {
 #endregion
 
 namespace NotT3ChatBackend.Endpoints {
+    #region Endpoints/GoogleLoginEndpoints.cs
+    public static class GoogleAuthEndpoints {
+        public static void MapGoogleAuthEndpoints(this IEndpointRouteBuilder app, bool isIdentitySupported) {
+            app.MapGet("/login/google", ExternalLogin);
+            app.MapGet("/oauth/google-cb", ExternalLoginCallback);
+            if (!isIdentitySupported)
+                app.MapGet("/manage/info", GetManageInfo);
+        }
+        static async Task<Results<Ok<InfoResponse>, ValidationProblem, NotFound>> GetManageInfo(ClaimsPrincipal claimsPrincipal, UserManager<NotT3User> userManager) {
+            if (await userManager.GetUserAsync(claimsPrincipal) is not { } user) {
+                return TypedResults.NotFound();
+            }
+            
+            return TypedResults.Ok(new InfoResponse() {
+                Email = await userManager.GetEmailAsync(user) ?? throw new NotSupportedException("Users must have an email."),
+                IsEmailConfirmed = await userManager.IsEmailConfirmedAsync(user),
+            });
+        }
+        static ChallengeHttpResult ExternalLogin(HttpContext ctx, SignInManager<NotT3User> signInManager) {
+            var props = signInManager.ConfigureExternalAuthenticationProperties(GoogleDefaults.AuthenticationScheme, "/oauth/google-cb");
+            return TypedResults.Challenge(props, [GoogleDefaults.AuthenticationScheme]);
+        }
+        static async Task<Results<UnauthorizedHttpResult, ForbidHttpResult, BadRequest<IEnumerable<IdentityError>>, RedirectHttpResult>> ExternalLoginCallback(SignInManager<NotT3User> signInManager, UserManager<NotT3User> userManager, HttpContext ctx, IConfiguration configuration) {
+            var info = await signInManager.GetExternalLoginInfoAsync();
+            if (info is null) return TypedResults.Unauthorized();
+
+            var signIn = await signInManager.ExternalLoginSignInAsync(info.LoginProvider, info.ProviderKey, isPersistent: false);
+            NotT3User? user = null;
+
+            if (!signIn.Succeeded) {
+                var email = info.Principal.FindFirstValue(ClaimTypes.Email);
+                if (email is null) return TypedResults.Forbid();
+
+                user = await userManager.FindByEmailAsync(email);
+                if (user is null) {
+                    user = new NotT3User { UserName = email, Email = email, EmailConfirmed = true };
+                    var createRes = await userManager.CreateAsync(user);
+                    if (!createRes.Succeeded) return TypedResults.BadRequest(createRes.Errors);
+                }
+                var addLogin = await userManager.AddLoginAsync(user, info);
+                if (!addLogin.Succeeded) return TypedResults.BadRequest(addLogin.Errors);
+            }
+
+            // If we got here, either it existed or we created it
+            user ??= await userManager.FindByEmailAsync(info.Principal.FindFirstValue(ClaimTypes.Email)!);
+
+            await signInManager.SignInAsync(user!, isPersistent: false);
+            await ctx.SignOutAsync(IdentityConstants.ExternalScheme); // clear external cookie
+            return TypedResults.Redirect(configuration["FrontEndUrl"]!);
+        }
+    }
+    #endregion
+
     #region Endpoints/ChatEndpoints.cs
     public class ChatEndpointsMarker;
     public static class ChatEndpoints {
@@ -362,12 +443,12 @@ namespace NotT3ChatBackend.Services {
     #region Services/TorandoService.cs
     public class TornadoService {
         private readonly Dictionary<string, TornadoApi> _apiByModel = new();
-        private readonly string[] _models;
+        private readonly Dictionary<string, ChatModel> _models;
         private readonly string? _titleModel;
         private readonly ILogger<TornadoService> _logger;
         private readonly ExaApiService _exaApiService;
         private readonly List<Tool>? _tools;
-        
+
         public TornadoService(ILogger<TornadoService> logger, ExaApiService exaApiService, IConfiguration configuration) {
             _logger = logger;
             _exaApiService = exaApiService;
@@ -386,7 +467,7 @@ namespace NotT3ChatBackend.Services {
             }
 
             var providerAuthentications = new List<ProviderAuthentication>();
-            var allModels = new List<string>();
+            var allModels = new Dictionary<string, ChatModel>();
             foreach (var (configKey, provider, vendorProvider) in new (string, LLmProviders, BaseVendorModelProvider)[] {
                 ("GOOGLE_API_KEY", LLmProviders.Google, ChatModel.Google),
                 ("OAI_API_KEY", LLmProviders.OpenAi, ChatModel.OpenAi),
@@ -402,48 +483,63 @@ namespace NotT3ChatBackend.Services {
             }) {
                 if (configuration[configKey] is string apiKey && !string.IsNullOrEmpty(apiKey)) {
                     providerAuthentications.Add(new ProviderAuthentication(provider, apiKey));
-                    allModels.AddRange(vendorProvider.AllModels.Select(m => m.Name));
+                    foreach (var m in vendorProvider.AllModels)
+                        allModels.TryAdd(m.Name, new ChatModel(m));
                     logger.LogInformation("{Provider} API key configured", provider);
                 }
             }
 
+            // Add the default api for all the *regular* providers
+            var api = new TornadoApi(providerAuthentications);
+            foreach (string m in allModels.Keys)
+                _apiByModel.TryAdd(m, api);
+
+            // Also allow specifying a custom url provider - create a new api wrapper
+            // for each one of them.
+            foreach (var customProvider in configuration.GetSection("CustomProviders").Get<CustomProviderInfo[]>()!) {
+                api = new TornadoApi(new Uri(customProvider.Url), customProvider.ApiKey, LLmProviders.Custom);
+                foreach (string m in customProvider.Models) {
+                    allModels.Add(m, new ChatModel(m, LLmProviders.Custom));
+                    _apiByModel.Add(m, api);
+                }
+            }
+                
             // Choose the title model - if it doesn't exist in the list of available models, then just don't
             _titleModel = configuration["NOTT3CHAT_TITLE_MODEL"] ?? "gemini-2.0-flash-lite-001";
-            if (!allModels.Contains(_titleModel)) {
+            if (!allModels.ContainsKey(_titleModel)) {
                 _titleModel = null;
                 logger.LogWarning("Title model {TitleModel} not found in available models, skipping", _titleModel);
             }
 
             if (configuration["NOTT3CHAT_MODELS_FILTER"] is string modelsFilter && !string.IsNullOrWhiteSpace(modelsFilter)) {
                 var modelsFilterArr = modelsFilter.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-                allModels = [.. allModels.Where(modelsFilterArr.Contains)];
+                allModels = allModels.Keys.Intersect(modelsFilterArr).ToDictionary(k => k, k => allModels[k]);
                 logger.LogInformation("Found models filter {Filter}, removing the rest", modelsFilter);
             }
 
-            _api = new TornadoApi(providerAuthentications);
-            _models = [.. allModels];
-            logger.LogInformation("TorandoService initialized with {ModelCount} models", _models.Length);
+            //_api = new TornadoApi(providerAuthentications);
+            _models = allModels;
+            logger.LogInformation("TorandoService initialized with {ModelCount} models", _models.Count);
         }
 
         public ICollection<ChatModelDTO> GetAvailableModels() {
-            return [.. _models.Select(m => new ChatModelDTO(m))];
+            return [.. _models.Values.Select(m => new ChatModelDTO(m))];
         }
 
         public async Task InitiateConversationAsync(string model, ICollection<NotT3Message> messages, CancellationToken ct, ExtendedChatStreamEventHandler handler) {
             _logger.LogInformation("Initiating conversation with model: {Model}, message count: {MessageCount}", model, messages.Count);
             try {
                 var convo = _apiByModel[model].Chat.CreateConversation(new ChatRequest {
-                    Model = new ChatModel(model),
+                    Model = _models[model],
                     Tools = _tools
                 });
-                convo.AppendSystemMessage($"""
-                ## The date today is: {DateTime.Now:dddd, MMMM dd'th' yyyy / dd/MM/yyyy}
-                You will always make sure to respond in the same language as the last user message, unless he specifically requested otherwise.
-                """.Trim().ReplaceLineEndings("\n"));
+                convo.AppendSystemMessage("You are a helpful AI assistant");
                 foreach (var msg in messages)
                     convo.AppendMessage(msg.Role, CleanMessageFromSpecialEntities(msg.Content));
 
-                handler.AfterFunctionCallsResolvedHandler = async (results, handler) => { await convo.StreamResponseRich(handler, ct); };
+                handler.AfterFunctionCallsResolvedHandler = async (results, handler) => { 
+                    await convo.StreamResponseRich(handler, ct); 
+                };
                 await convo.StreamResponseRich(handler, ct);
                 _logger.LogInformation("Conversation streaming completed");
             }
@@ -455,6 +551,7 @@ namespace NotT3ChatBackend.Services {
         }
 
         private string CleanMessageFromSpecialEntities(string content) {
+            content = Regex.Replace(content, @"<think>[\S\s]*?</think>", "");
             content = Regex.Replace(content, @"<WebSearch>.*?</WebSearch>", "");
             content = Regex.Replace(content, @"<WebFetch>.*?</WebFetch>", "");
             return content;
@@ -468,8 +565,8 @@ namespace NotT3ChatBackend.Services {
 
             _logger.LogInformation("Initiating title assignment with model: {Model}", _titleModel);
             try {
-                var convo = _api.Chat.CreateConversation(_titleModel);
-                convo.AppendMessage(ChatMessageRoles.System, "Generate a concise, engaging chat title (max 6 words) that clearly reflects the main topic or purpose of the userï¿½s first message (or its first 500 characters). The title must be in the **same language** as the userï¿½s message. Output **only** the title ï¿½ no explanations, formatting, or extra text. Ignore any messages that are about testing or describing this instruction itself.");
+                var convo = _apiByModel[_titleModel].Chat.CreateConversation(_models[_titleModel]);
+                convo.AppendMessage(ChatMessageRoles.System, "Generate a concise, engaging chat title (max 6 words) that clearly reflects the main topic or purpose of the user’s first message (or its first 500 characters). The title must be in the **same language** as the user’s message. Output **only** the title — no explanations, formatting, or extra text. Ignore any messages that are about testing or describing this instruction itself.");
                 convo.AppendMessage(ChatMessageRoles.User, "<FIRST_MESSAGE>" + initialMessage[..Math.Min(500, initialMessage.Length)] + "</FIRST_MESSAGE>\n\nPlease output the title:");
                 var response = await convo.GetResponseRich();
                 _logger.LogInformation("Title assignment completed: {Title}", response.Text);
@@ -929,5 +1026,9 @@ namespace NotT3ChatBackend.Utils {
 
     #region Utils/StreamingMessage.cs
     public record StreamingMessage(StringBuilder SbMessage, NotT3Message Message, SemaphoreSlim Semaphore, CancellationTokenSource Ct);
+    #endregion
+
+    #region Utils/CustomProviderInfo.cs
+    public record CustomProviderInfo(string Url, string ApiKey, string[] Models);
     #endregion
 }

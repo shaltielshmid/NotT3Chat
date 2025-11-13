@@ -543,3 +543,8 @@ FodyWeavers.xsd
 # End of https://www.toptal.com/developers/gitignore/api/node,visualstudio
 
 .claude
+backend/appsettings.Development.json
+
+backend/Migrations/
+
+*.dat
