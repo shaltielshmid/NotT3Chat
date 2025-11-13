@@ -548,3 +548,7 @@ backend/appsettings.Development.json
 backend/Migrations/
 
 *.dat
+
+*.dat-shm
+
+*.dat-wal

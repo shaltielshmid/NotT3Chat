@@ -2,3 +2,5 @@
 
 /* Register Streamdown as a source for Tailwind to scan */
 @source "../node_modules/streamdown/dist/index.js";
+
+/* Custom font face - will be injected dynamically if needed */

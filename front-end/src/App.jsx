@@ -8,6 +8,7 @@ import {
 } from 'react-router-dom';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import { CssBaseline } from '@mui/material';
+import WebFont from 'webfontloader';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ChatProvider } from './contexts/ChatContext';
 import { ModelsProvider } from './contexts/ModelsContext';
@@ -18,33 +19,39 @@ import ProtectedRoute from './components/ProtectedRoute';
 import RegisterPage from './components/RegisterPage';
 import { setNavigate } from './services/navigationService';
 
-// Get custom font URL from environment
+// Get custom font URL and family from environment
 const customFontUrl = import.meta.env.VITE_CUSTOM_FONT_URL;
-const customFontFamily = import.meta.env.VITE_CUSTOM_FONT_FAMILY || 'Inter';
+const customFontFamily = import.meta.env.VITE_CUSTOM_FONT_FAMILY;
 
-const theme = createTheme({
-  palette: {
-    mode: 'light',
-    primary: {
-      main: '#2563eb',
-      contrastText: '#ffffff',
+// Create theme with custom font family if provided
+const createAppTheme = () => {
+  const fontFamily = customFontFamily 
+    ? `"${customFontFamily}", "Inter", "Roboto", "Helvetica", "Arial", sans-serif`
+    : '"Inter", "Roboto", "Helvetica", "Arial", sans-serif';
+
+  return createTheme({
+    palette: {
+      mode: 'light',
+      primary: {
+        main: '#2563eb',
+        contrastText: '#ffffff',
+      },
+      secondary: {
+        main: '#7c3aed',
+      },
+      background: {
+        default: '#f8fafc',
+        paper: '#ffffff',
+      },
+      grey: {
+        50: '#f8fafc',
+        100: '#f1f5f9',
+        200: '#e2e8f0',
+      },
     },
-    secondary: {
-      main: '#7c3aed',
+    typography: {
+      fontFamily: fontFamily,
     },
-    background: {
-      default: '#f8fafc',
-      paper: '#ffffff',
-    },
-    grey: {
-      50: '#f8fafc',
-      100: '#f1f5f9',
-      200: '#e2e8f0',
-    },
-  },
-  typography: {
-    fontFamily: `"${customFontFamily}", "Inter", "Roboto", "Helvetica", "Arial", sans-serif`,
-  },
   components: {
     MuiButton: {
       styleOverrides: {
@@ -64,7 +71,10 @@ const theme = createTheme({
       },
     },
   },
-});
+  });
+};
+
+const theme = createAppTheme();
 
 const AppRoutes = () => {
   const { isAuthenticated } = useAuth();
@@ -123,13 +133,40 @@ const AppRoutes = () => {
 };
 
 const App = () => {
-  // Load custom font if URL is provided
+  // Load custom font
   useEffect(() => {
-    if (customFontUrl) {
-      const link = document.createElement('link');
-      link.rel = 'stylesheet';
-      link.href = customFontUrl;
-      document.head.appendChild(link);
+    if (customFontFamily && customFontUrl) {
+      const isFontFile = /\.(woff2?|ttf|otf)$/i.test(customFontUrl);
+      
+      if (isFontFile) {
+        const style = document.createElement('style');
+        const fontFormat = customFontUrl.match(/\.(woff2?|ttf|otf)$/i)?.[1];
+        const format = fontFormat === 'woff2' ? 'woff2' : 
+                      fontFormat === 'woff' ? 'woff' :
+                      fontFormat === 'ttf' ? 'truetype' : 'opentype';
+        
+        style.textContent = `
+          @font-face {
+            font-family: '${customFontFamily}';
+            src: url('${customFontUrl}') format('${format}');
+            font-weight: normal;
+            font-style: normal;
+            font-display: swap;
+          }
+        `;
+        document.head.appendChild(style);
+        
+        if (document.fonts && document.fonts.load) {
+          document.fonts.load(`16px "${customFontFamily}"`).catch(() => {});
+        }
+      } else {
+        WebFont.load({
+          custom: {
+            families: [customFontFamily],
+            urls: [customFontUrl]
+          }
+        });
+      }
     }
   }, []);
 
