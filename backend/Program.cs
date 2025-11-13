@@ -10,6 +10,7 @@ using LlmTornado.Threads;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Google;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
@@ -541,8 +542,16 @@ namespace NotT3ChatBackend.Services {
                 foreach (var msg in messages)
                     convo.AppendMessage(msg.Role, CleanMessageFromSpecialEntities(msg.Content));
 
-                handler.AfterFunctionCallsResolvedHandler = async (results, handler) => { 
-                    await convo.StreamResponseRich(handler, ct); 
+
+                // We want to max out total searches, so that it doesn't get stuck in an endless loop.
+                int totalSearches = 0;
+                handler.AfterFunctionCallsResolvedHandler = async (results, handler) => {
+                    if (results.ToolResults.Any(tr => tr.Call?.Name == "web_search")) {
+                        totalSearches++;
+                        if (totalSearches >= 3)
+                            convo.RequestParameters.Tools = convo.RequestParameters.Tools!.Where(t => t.Function!.Name != "web_search").ToList();
+                    }
+                    await convo.StreamResponseRich(handler, ct);
                 };
                 await convo.StreamResponseRich(handler, ct);
                 _logger.LogInformation("Conversation streaming completed");
@@ -570,7 +579,7 @@ namespace NotT3ChatBackend.Services {
             _logger.LogInformation("Initiating title assignment with model: {Model}", _titleModel);
             try {
                 var convo = _apiByModel[_titleModel].Chat.CreateConversation(_models[_titleModel]);
-                convo.AppendMessage(ChatMessageRoles.System, "Generate a concise, engaging chat title (max 6 words) that clearly reflects the main topic or purpose of the user’s first message (or its first 500 characters). The title must be in the **same language** as the user’s message. Output **only** the title — no explanations, formatting, or extra text. Ignore any messages that are about testing or describing this instruction itself.");
+                convo.AppendMessage(ChatMessageRoles.System, "Generate a concise, engaging chat title (max 6 words) that clearly reflects the main topic or purpose of the userï¿½s first message (or its first 500 characters). The title must be in the **same language** as the userï¿½s message. Output **only** the title ï¿½ no explanations, formatting, or extra text. Ignore any messages that are about testing or describing this instruction itself.");
                 convo.AppendMessage(ChatMessageRoles.User, "<FIRST_MESSAGE>" + initialMessage[..Math.Min(500, initialMessage.Length)] + "</FIRST_MESSAGE>\n\nPlease output the title:");
                 var response = await convo.GetResponseRich();
                 _logger.LogInformation("Title assignment completed: {Title}", response.Text);
@@ -925,7 +934,8 @@ namespace NotT3ChatBackend.Data {
         internal async Task<NotT3Conversation> CreateConversationAsync(NotT3User user) {
             logger.LogInformation("Creating new conversation for user: {UserId}", user.Id);
             var convo = new NotT3Conversation() {
-                UserId = user.Id
+                UserId = user.Id,
+                CreatedAt = DateTime.UtcNow,
             };
             await Conversations.AddAsync(convo);
             await SaveChangesAsync();
@@ -963,7 +973,7 @@ namespace NotT3ChatBackend.Models {
     public class NotT3Conversation {
         [Key]
         public string Id { get; set; } = Guid.NewGuid().ToString();
-        public DateTime CreatedAt { get; } = DateTime.UtcNow;
+        public required DateTime CreatedAt { get; set; }
         public string Title { get; set; } = "New Chat";
         public required string UserId { get; set; }
         public bool IsStreaming { get; set; } = false;

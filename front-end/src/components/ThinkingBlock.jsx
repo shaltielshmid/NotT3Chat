@@ -12,6 +12,7 @@ import {
   ExpandMore,
   ExpandLess
 } from '@mui/icons-material';
+import { getTextDirection } from '../extra/utils';
 import './ThinkingBlock.css';
 
 const countWords = (text) => {
@@ -24,6 +25,7 @@ const ThinkingBlock = ({ content, isComplete }) => {
   const [showWarning, setShowWarning] = useState(true);
   const [hasAccepted, setHasAccepted] = useState(false);
   const wordCount = useMemo(() => countWords(content), [content]);
+  const textDirection = useMemo(() => getTextDirection(content), [content]);
 
   useEffect(() => {
     const accepted = localStorage.getItem('thinkingTracesAccepted');
@@ -75,8 +77,8 @@ const ThinkingBlock = ({ content, isComplete }) => {
                 There is no guarantee they will be useful or accurate.
               </Typography>
               <Typography variant="body2" className="warning-text" dir="rtl">
-                החשיבה לעיתים קרובות אינם קוהרנטיים או אינם הגיוניים לבני אדם.
-                אין ערובה שהם יהיו שימושיים או מדויקים.
+                תיעוד החשיבה לעיתים קרובות אינו קוהרנטי או אינו הגיוני לבני אדם. 
+                אין ערובה שהוא יהיה שימושי או מדויק
               </Typography>
               <Button 
                 variant="contained" 
@@ -92,6 +94,7 @@ const ThinkingBlock = ({ content, isComplete }) => {
               <Typography 
                 variant="body2" 
                 component="div"
+                dir={textDirection}
                 style={{ 
                   whiteSpace: 'pre-wrap', 
                   wordBreak: 'break-word',
