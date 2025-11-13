@@ -11,6 +11,7 @@ using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Google;
 using Microsoft.AspNetCore.Http.HttpResults;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.Data;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
@@ -146,6 +147,9 @@ namespace NotT3ChatBackend {
             }
 
             Log.Information("Configuring HTTP pipeline");
+            app.UseForwardedHeaders(new ForwardedHeadersOptions {
+                ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
+            });
             app.UseRouting();
             app.UseCors("OpenCorsPolicy");
 
@@ -196,10 +200,6 @@ namespace NotT3ChatBackend.Endpoints {
         }
         static ChallengeHttpResult ExternalLogin(HttpContext ctx, SignInManager<NotT3User> signInManager, IWebHostEnvironment env) {
             var props = signInManager.ConfigureExternalAuthenticationProperties(GoogleDefaults.AuthenticationScheme, "/oauth/google-cb");
-            if (env.IsProduction()) {
-                ctx.Request.IsHttps = true;
-                ctx.Request.Scheme = "https";
-            }
             return TypedResults.Challenge(props, [GoogleDefaults.AuthenticationScheme]);
         }
         static async Task<Results<UnauthorizedHttpResult, ForbidHttpResult, BadRequest<IEnumerable<IdentityError>>, RedirectHttpResult>> ExternalLoginCallback(SignInManager<NotT3User> signInManager, UserManager<NotT3User> userManager, HttpContext ctx, IConfiguration configuration) {
