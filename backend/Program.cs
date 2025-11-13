@@ -194,8 +194,12 @@ namespace NotT3ChatBackend.Endpoints {
                 IsEmailConfirmed = await userManager.IsEmailConfirmedAsync(user),
             });
         }
-        static ChallengeHttpResult ExternalLogin(HttpContext ctx, SignInManager<NotT3User> signInManager) {
+        static ChallengeHttpResult ExternalLogin(HttpContext ctx, SignInManager<NotT3User> signInManager, IWebHostEnvironment env) {
             var props = signInManager.ConfigureExternalAuthenticationProperties(GoogleDefaults.AuthenticationScheme, "/oauth/google-cb");
+            if (env.IsProduction()) {
+                ctx.Request.IsHttps = true;
+                ctx.Request.Scheme = "https";
+            }
             return TypedResults.Challenge(props, [GoogleDefaults.AuthenticationScheme]);
         }
         static async Task<Results<UnauthorizedHttpResult, ForbidHttpResult, BadRequest<IEnumerable<IdentityError>>, RedirectHttpResult>> ExternalLoginCallback(SignInManager<NotT3User> signInManager, UserManager<NotT3User> userManager, HttpContext ctx, IConfiguration configuration) {
