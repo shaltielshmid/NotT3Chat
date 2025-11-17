@@ -579,7 +579,7 @@ namespace NotT3ChatBackend.Services {
             _logger.LogInformation("Initiating title assignment with model: {Model}", _titleModel);
             try {
                 var convo = _apiByModel[_titleModel].Chat.CreateConversation(_models[_titleModel]);
-                convo.AppendMessage(ChatMessageRoles.System, "Generate a concise, engaging chat title (max 6 words) that clearly reflects the main topic or purpose of the user�s first message (or its first 500 characters). The title must be in the **same language** as the user�s message. Output **only** the title � no explanations, formatting, or extra text. Ignore any messages that are about testing or describing this instruction itself.");
+                convo.AppendMessage(ChatMessageRoles.System, "Generate a concise, engaging chat title (max 6 words) that clearly reflects the main topic or purpose of the user's first message (or its first 500 characters). The title must be in the **same language** as the user's message. Output **only** the title � no explanations, formatting, or extra text. Ignore any messages that are about testing or describing this instruction itself. If the message is in English, the title should be in English. Same with any other language.");
                 convo.AppendMessage(ChatMessageRoles.User, "<FIRST_MESSAGE>" + initialMessage[..Math.Min(500, initialMessage.Length)] + "</FIRST_MESSAGE>\n\nPlease output the title:");
                 var response = await convo.GetResponseRich();
                 _logger.LogInformation("Title assignment completed: {Title}", response.Text);
