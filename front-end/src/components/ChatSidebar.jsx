@@ -26,8 +26,14 @@ import { useChats } from '../contexts/ChatContext';
 import { formatDate } from '../extra/utils';
 import './ChatSidebar.css';
 
-const ChatSidebar = ({ onChatSelect, currentChatId, mobileOpen, onMobileClose }) => {
-  const { chats, loading, error, hasLoaded, loadChats, deleteChat } = useChats();
+const ChatSidebar = ({
+  onChatSelect,
+  currentChatId,
+  mobileOpen,
+  onMobileClose,
+}) => {
+  const { chats, loading, error, hasLoaded, loadChats, deleteChat } =
+    useChats();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
@@ -74,7 +80,12 @@ const ChatSidebar = ({ onChatSelect, currentChatId, mobileOpen, onMobileClose })
               <ChatIcon />
             </IconButton>
             {isMobile && (
-              <IconButton onClick={onMobileClose} size="small" title="Close sidebar" className="close-button">
+              <IconButton
+                onClick={onMobileClose}
+                size="small"
+                title="Close sidebar"
+                className="close-button"
+              >
                 <CloseIcon />
               </IconButton>
             )}
@@ -116,14 +127,14 @@ const ChatSidebar = ({ onChatSelect, currentChatId, mobileOpen, onMobileClose })
                   <ListItemButton
                     onClick={() => handleChatClick(chat.id)}
                     selected={currentChatId === chat.id}
-                    className={lcn ('chat-button', {
+                    className={lcn('chat-button', {
                       selected: currentChatId === chat.id,
                     })}
                   >
                     <Box className="chat-content">
                       <Typography
                         variant="body2"
-                        className={lcn ('chat-title', {
+                        className={lcn('chat-title', {
                           selected: currentChatId === chat.id,
                         })}
                       >

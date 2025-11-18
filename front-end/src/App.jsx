@@ -22,10 +22,12 @@ import { setNavigate } from './services/navigationService';
 // Get custom font URL and family from environment
 const customFontUrl = import.meta.env.VITE_CUSTOM_FONT_URL;
 const customFontFamily = import.meta.env.VITE_CUSTOM_FONT_FAMILY;
+const appTitle = import.meta.env.VITE_APP_TITLE || 'NotT3Chat';
+const appIcon = import.meta.env.VITE_APP_ICON;
 
 // Create theme with custom font family if provided
 const createAppTheme = () => {
-  const fontFamily = customFontFamily 
+  const fontFamily = customFontFamily
     ? `"${customFontFamily}", "Inter", "Roboto", "Helvetica", "Arial", sans-serif`
     : '"Inter", "Roboto", "Helvetica", "Arial", sans-serif';
 
@@ -52,25 +54,25 @@ const createAppTheme = () => {
     typography: {
       fontFamily: fontFamily,
     },
-  components: {
-    MuiButton: {
-      styleOverrides: {
-        root: {
-          textTransform: 'none',
-          fontWeight: 600,
+    components: {
+      MuiButton: {
+        styleOverrides: {
+          root: {
+            textTransform: 'none',
+            fontWeight: 600,
+          },
         },
       },
-    },
-    MuiTextField: {
-      styleOverrides: {
-        root: {
-          '& .MuiOutlinedInput-root': {
-            borderRadius: 12,
+      MuiTextField: {
+        styleOverrides: {
+          root: {
+            '& .MuiOutlinedInput-root': {
+              borderRadius: 12,
+            },
           },
         },
       },
     },
-  },
   });
 };
 
@@ -79,7 +81,7 @@ const theme = createAppTheme();
 const AppRoutes = () => {
   const { isAuthenticated } = useAuth();
   const navigate = useNavigate();
-  
+
   // Initialize navigation service with React Router's navigate function
   React.useEffect(() => {
     setNavigate(navigate);
@@ -133,18 +135,42 @@ const AppRoutes = () => {
 };
 
 const App = () => {
+  // Set document title and favicon
+  useEffect(() => {
+    // Set page title
+    document.title = appTitle;
+
+    // Set favicon if provided
+    if (appIcon) {
+      const link =
+        document.querySelector("link[rel~='icon']") ||
+        document.createElement('link');
+      link.type = 'image/x-icon';
+      link.rel = 'icon';
+      link.href = appIcon;
+      if (!document.querySelector("link[rel~='icon']")) {
+        document.head.appendChild(link);
+      }
+    }
+  }, []);
+
   // Load custom font
   useEffect(() => {
     if (customFontFamily && customFontUrl) {
       const isFontFile = /\.(woff2?|ttf|otf)$/i.test(customFontUrl);
-      
+
       if (isFontFile) {
         const style = document.createElement('style');
         const fontFormat = customFontUrl.match(/\.(woff2?|ttf|otf)$/i)?.[1];
-        const format = fontFormat === 'woff2' ? 'woff2' : 
-                      fontFormat === 'woff' ? 'woff' :
-                      fontFormat === 'ttf' ? 'truetype' : 'opentype';
-        
+        const format =
+          fontFormat === 'woff2'
+            ? 'woff2'
+            : fontFormat === 'woff'
+              ? 'woff'
+              : fontFormat === 'ttf'
+                ? 'truetype'
+                : 'opentype';
+
         style.textContent = `
           @font-face {
             font-family: '${customFontFamily}';
@@ -155,7 +181,7 @@ const App = () => {
           }
         `;
         document.head.appendChild(style);
-        
+
         if (document.fonts && document.fonts.load) {
           document.fonts.load(`16px "${customFontFamily}"`).catch(() => {});
         }
@@ -163,8 +189,8 @@ const App = () => {
         WebFont.load({
           custom: {
             families: [customFontFamily],
-            urls: [customFontUrl]
-          }
+            urls: [customFontUrl],
+          },
         });
       }
     }

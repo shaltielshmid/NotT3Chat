@@ -11,7 +11,9 @@ export const navigateTo = (route) => {
   if (navigate) {
     navigate(route);
   } else {
-    console.warn('Navigation function not set. Falling back to window.location');
+    console.warn(
+      'Navigation function not set. Falling back to window.location'
+    );
     window.location.href = route;
   }
 };

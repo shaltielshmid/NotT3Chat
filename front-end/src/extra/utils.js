@@ -28,11 +28,11 @@ export const formatDate = (dateString) => {
  */
 export const isFirstWordEnglish = (text) => {
   if (!text || typeof text !== 'string') return false;
-  
+
   // Trim and get words
   const trimmed = text.trim();
   const words = trimmed.split(/\s+/);
-  
+
   // Find the first word that contains letters
   for (const word of words) {
     if (/[a-zA-Z]/.test(word)) {
@@ -44,7 +44,7 @@ export const isFirstWordEnglish = (text) => {
       return false;
     }
   }
-  
+
   return false;
 };
 

@@ -31,6 +31,8 @@ This is far from just a "hello world" chat. We've packed in some serious feature
 *   **🔐 Flexible Authentication:** Email/password login and/or Google OAuth. Configure what you need.
 *   **🎨 Customizable Branding:** Custom fonts, logos, titles, and icons via environment variables.
 *   **📜 Chat History:** All your conversations are saved and can be revisited anytime.
+*   **📏 Smart Message Limits:** 64KB message size limit with visual warnings to prevent context overflow.
+*   **🛡️ Repetition Loop Detection:** Automatically detects and stops infinite LLM loops using n-gram analysis.
 
 ## 🛠️ Tech Stack & How It Was Built
 
@@ -163,6 +165,9 @@ VITE_CUSTOM_PROVIDER_FALLBACK_ICON_URL=https://example.com/provider-icon.png
 # Optional: Authentication methods (defaults to true for identity, false for google)
 VITE_USE_IDENTITY_AUTH=true
 VITE_USE_GOOGLE_AUTH=false
+
+# Optional: Terms of Service link
+VITE_TERMS_OF_SERVICE_URL=https://example.com/terms
 ```
 
 ---

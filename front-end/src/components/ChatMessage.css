@@ -129,7 +129,7 @@
 /* Ensure br tags from markdown breaks are visible */
 .chat-message .markdown-content br {
   display: block;
-  content: "";
+  content: '';
   margin: 0;
 }
 
@@ -233,7 +233,7 @@
     align-items: flex-start;
     gap: 8px;
   }
-  
+
   .chat-message .message-actions {
     align-self: flex-end;
   }

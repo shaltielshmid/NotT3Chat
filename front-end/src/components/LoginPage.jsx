@@ -27,6 +27,7 @@ const LoginPage = () => {
   const useIdentityAuth = import.meta.env.VITE_USE_IDENTITY_AUTH === 'true';
   const appTitle = import.meta.env.VITE_APP_TITLE || 'NotT3Chat';
   const appSlogan = import.meta.env.VITE_APP_SLOGAN || 'Your AI Chat Companion';
+  const termsOfServiceUrl = import.meta.env.VITE_TERMS_OF_SERVICE_URL;
 
   const handleSubmit = useCallback(
     async (e) => {
@@ -68,7 +69,13 @@ const LoginPage = () => {
             </Typography>
           </Box>
           <Paper elevation={6} className="login-paper">
-            <Typography component="h2" variant="h5" align="center" gutterBottom className="login-title">
+            <Typography
+              component="h2"
+              variant="h5"
+              align="center"
+              gutterBottom
+              className="login-title"
+            >
               Welcome Back
             </Typography>
 
@@ -141,7 +148,23 @@ const LoginPage = () => {
                   Continue with Google
                 </Button>
               )}
-              
+
+              {termsOfServiceUrl && (
+                <Box sx={{ mt: 2, textAlign: 'center' }}>
+                  <Typography variant="caption" color="text.secondary">
+                    By signing in, you agree to our{' '}
+                    <a
+                      href={termsOfServiceUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{ color: 'inherit', textDecoration: 'underline' }}
+                    >
+                      Terms of Service
+                    </a>
+                  </Typography>
+                </Box>
+              )}
+
               {useIdentityAuth && (
                 <Box className="account-link-container">
                   <Typography variant="body2">

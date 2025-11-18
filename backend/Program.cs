@@ -35,6 +35,7 @@ using System;
 using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
 using System.Reflection.Metadata;
+using System.Runtime.CompilerServices;
 using System.Security.Claims;
 using System.Text;
 using System.Text.Encodings.Web;
@@ -50,6 +51,7 @@ namespace NotT3ChatBackend {
     #region Program.cs
     public class Program {
         public static void Main(string[] args) {
+            
             var builder = WebApplication.CreateBuilder(args);
 
             bool useGoogleAuth = builder.Configuration.GetValue<bool>("Authentication:UseGoogle", false);
@@ -121,7 +123,9 @@ namespace NotT3ChatBackend {
                 options.Password.RequireUppercase = false;
             });
 
-            builder.Services.AddSignalR();
+            builder.Services.AddSignalR(options => {
+                options.MaximumReceiveMessageSize = 64 * 1024; // Expanded to 64k bytes = ~25k low resource language tokens
+            });
             builder.Services.AddHttpClient();
             builder.Services.AddSingleton<TornadoService>();
             builder.Services.AddSingleton<ExaApiService>();
@@ -206,10 +210,10 @@ namespace NotT3ChatBackend.Endpoints {
         static async Task<Results<UnauthorizedHttpResult, ForbidHttpResult, BadRequest<IEnumerable<IdentityError>>, RedirectHttpResult>> ExternalLoginCallback(SignInManager<NotT3User> signInManager, UserManager<NotT3User> userManager, HttpContext ctx, IConfiguration configuration) {
             var info = await signInManager.GetExternalLoginInfoAsync();
             if (info is null) return TypedResults.Unauthorized();
-
+            
             var signIn = await signInManager.ExternalLoginSignInAsync(info.LoginProvider, info.ProviderKey, isPersistent: false);
             NotT3User? user = null;
-
+            
             if (!signIn.Succeeded) {
                 var email = info.Principal.FindFirstValue(ClaimTypes.Email);
                 if (email is null) return TypedResults.Forbid();
@@ -453,10 +457,14 @@ namespace NotT3ChatBackend.Services {
         private readonly ILogger<TornadoService> _logger;
         private readonly ExaApiService _exaApiService;
         private readonly List<Tool>? _tools;
+        private readonly IReadOnlyList<string> _specialTokensToSanitize;
 
         public TornadoService(ILogger<TornadoService> logger, ExaApiService exaApiService, IConfiguration configuration) {
             _logger = logger;
             _exaApiService = exaApiService;
+
+            // Replace this with your own
+            _specialTokensToSanitize = ["<|im_start|>", "<|im_end|>", "<tool_response>", "</tool_response>", "<think>", "</think>", "<tool_call>", "</tool_call>"];
 
             if (_exaApiService.IsEnabled) {
                 _tools = [
@@ -540,8 +548,7 @@ namespace NotT3ChatBackend.Services {
                 });
                 convo.AppendSystemMessage("You are a helpful AI assistant");
                 foreach (var msg in messages)
-                    convo.AppendMessage(msg.Role, CleanMessageFromSpecialEntities(msg.Content));
-
+                    convo.AppendMessage(msg.Role, CleanMessageFromSpecialEntities(msg.Content, msg.Role));
 
                 // We want to max out total searches, so that it doesn't get stuck in an endless loop.
                 int totalSearches = 0;
@@ -563,10 +570,18 @@ namespace NotT3ChatBackend.Services {
             }
         }
 
-        private string CleanMessageFromSpecialEntities(string content) {
-            content = Regex.Replace(content, @"<think>[\S\s]*?</think>", "");
-            content = Regex.Replace(content, @"<WebSearch>.*?</WebSearch>", "");
-            content = Regex.Replace(content, @"<WebFetch>.*?</WebFetch>", "");
+        private string CleanMessageFromSpecialEntities(string content, ChatMessageRoles role) {
+            if (role == ChatMessageRoles.Assistant) {
+                content = Regex.Replace(content, @"<think>[\S\s]*?</think>", "");
+                content = Regex.Replace(content, @"<WebSearch>.*?</WebSearch>", "[web_search was called, results removed to save context.]");
+                content = Regex.Replace(content, @"<WebFetch>.*?</WebFetch>", "[web_fetch was called, results removed to save context.]");
+            }
+            else if (role == ChatMessageRoles.User) {
+                // Sanitize special tokens by just adding a space after the
+                // first < so they're no longer special
+                content = Regex.Replace(content, string.Join("|", _specialTokensToSanitize.Select(Regex.Escape)), m => m.Value.Insert(1, " "));
+            }
+
             return content;
         }
 
@@ -619,6 +634,10 @@ namespace NotT3ChatBackend.Services {
 
                 await streamingMessage.Semaphore.WaitAsync();
                 try {
+                    if (streamingMessage.RepGuard.NewToken(content)) {
+                        streamingMessage.CustomError = JsonSerializer.Serialize(new { error = "Generation stopped: the model fell into a repetition loop.\nיצירת הטקסט נעצרה: המודל נכנס ללולאת חזרה" }, new JsonSerializerOptions() { Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping });
+                        streamingMessage.Ct.Cancel();
+                    }
                     streamingMessage.SbMessage.Append(content);
                     await hubContext.Clients.Group(convoId).SendAsync("NewAssistantPart", convoId, content);
                 }
@@ -663,11 +682,17 @@ namespace NotT3ChatBackend.Services {
                     _memoryCache.Set(convoId, streamingMessage, TimeSpan.FromMinutes(1));
                 },
                 ExceptionOccurredHandler = async (ex) => {
+                    // Special tool calling error:
+                    string errorMessage = streamingMessage.CustomError ?? ex.Message;
+                    if (ex.Message.Contains("\"code\":400}}"))
+                        errorMessage = JsonSerializer.Serialize(new { error = "We're sorry, but the model was unable to generate a valid tool call. Please try regenerating your request.", hebrewError = "אנו מתנצלים, אך המודל לא הצליח ליצור קריאת כלי חוקית. אנא נסה ליצור מחדש את בקשתך." }, new JsonSerializerOptions() { Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping });
+
                     _logger.LogError(ex, "Error during streaming for conversation: {ConversationId}", convoId);
-                    await hubContext.Clients.Group(convoId).SendAsync("EndAssistantMessage", convoId, ex.Message);
+                    await SendNewContent("", false); // End reasoning, if it's still running
+                    await hubContext.Clients.Group(convoId).SendAsync("EndAssistantMessage", convoId, errorMessage);
 
                     assistantMsg.Content = streamingMessage.SbMessage.ToString();
-                    assistantMsg.FinishError = ex.Message;
+                    assistantMsg.FinishError = errorMessage;
                     dbContext.Messages.Add(assistantMsg);
                     convo.IsStreaming = false;
                     await dbContext.SaveChangesAsync();
@@ -1039,10 +1064,74 @@ namespace NotT3ChatBackend.Utils {
     #endregion
 
     #region Utils/StreamingMessage.cs
-    public record StreamingMessage(StringBuilder SbMessage, NotT3Message Message, SemaphoreSlim Semaphore, CancellationTokenSource Ct);
+    public record StreamingMessage(StringBuilder SbMessage, NotT3Message Message, SemaphoreSlim Semaphore, CancellationTokenSource Ct) {
+        public readonly RepetitionGuard RepGuard = new();
+        public string? CustomError { get; set; }
+    }
     #endregion
 
     #region Utils/CustomProviderInfo.cs
     public record CustomProviderInfo(string Url, string ApiKey, string[] Models);
+    #endregion
+
+    #region Utils/RepetitionGuard.cs
+    /// <summary>
+    /// Class used to identify if the LLM gets stuck in an infinite loop 
+    /// Hyper optimized so that we don't waste time on this
+    /// </summary>
+    public sealed class RepetitionGuard {
+        const int BufferSize = 1024; // *Must be a power of 2 to work*
+        const int ModuloNumber = BufferSize - 1;
+        const int MaxTokenRep = 32;
+        const int MinGramRep = 5;
+        const int MaxNGramLen = 12; // The number of ngram repetitions is MaxTokenRep / NGramLen
+        const int MinNGramLen = 3; 
+
+        readonly int[] _history = new int[BufferSize];
+        private int _index = 0;
+        private int _maxHistoryIndex = 0;
+        private int _consecutiveTokenRunCount = 1;
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool NewToken(string? token) {
+            // Don't count whitespace in repetition
+            if (string.IsNullOrWhiteSpace(token)) 
+                return false;
+
+            // Hash our token and insert it into history
+            int hash = token.GetHashCode();
+            _history[_index] = hash;
+            _index = (_index + 1) & ModuloNumber; // Faster than modulo
+
+            // Increment our max history index (aka, how many items stored) 
+            if (_maxHistoryIndex < BufferSize) _maxHistoryIndex++;
+
+            // Check for a repeat by comparing this token to the one before (-2 since we already incremented)
+            if (_maxHistoryIndex > 1 && _history[(_index - 2) & ModuloNumber] == hash) { 
+                if (++_consecutiveTokenRunCount >= MaxTokenRep) 
+                    return true; 
+            } 
+            else _consecutiveTokenRunCount = 1; // Reset the counter
+
+            if (_maxHistoryIndex < MaxNGramLen) return false;
+
+            // Check for NGrams (will be unrolled) - the idea is that we want at least N tokens in the repeat
+            // cycle - so we have to have at least MaxTokenRep / p in the history
+            for (int p = MinNGramLen; p <= MaxNGramLen; p++) {
+                bool ok = true;
+                for (int k = 1; k <= p; k++) {
+                    int x = _history[(_index - k) & ModuloNumber];
+                    for (int j = 1; j < Math.Max(MaxTokenRep / p, MinGramRep); j++) {
+                        if (x != _history[(_index - k - j * p) & ModuloNumber]) {
+                            ok = false; break;
+                        }
+                    }
+                    if (!ok) break;
+                }
+                if (ok) return true;
+            }
+            return false;
+        }
+    }
     #endregion
 }

@@ -131,3 +131,19 @@
   border-radius: 8px;
   height: fit-content;
 }
+
+.chat-room .message-size-warning {
+  padding: 4px 8px;
+  border-radius: 4px;
+  margin-top: -4px;
+}
+
+.chat-room .size-warning {
+  color: #ed8936;
+  font-weight: 500;
+}
+
+.chat-room .size-error {
+  color: #e53e3e;
+  font-weight: 600;
+}

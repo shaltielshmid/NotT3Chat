@@ -1,24 +1,23 @@
 import PropTypes from 'prop-types';
 import { useCallback, useMemo, useState, useEffect } from 'react';
 import lcn from 'light-classnames';
-import { 
-  Box, 
-  Typography, 
-  CircularProgress, 
+import {
+  Box,
+  Typography,
+  CircularProgress,
   Button,
-  Collapse
+  Collapse,
 } from '@mui/material';
-import { 
-  ExpandMore,
-  ExpandLess
-} from '@mui/icons-material';
+import { ExpandMore, ExpandLess } from '@mui/icons-material';
 import { getTextDirection } from '../extra/utils';
 import './ThinkingBlock.css';
 
 const countWords = (text) => {
-  return text.trim().split(/\s+/).filter(word => word.length > 0).length;
+  return text
+    .trim()
+    .split(/\s+/)
+    .filter((word) => word.length > 0).length;
 };
-
 
 const ThinkingBlock = ({ content, isComplete }) => {
   const [isExpanded, setIsExpanded] = useState(false);
@@ -42,13 +41,16 @@ const ThinkingBlock = ({ content, isComplete }) => {
   }, []);
 
   const toggleExpanded = useCallback(() => {
-    setIsExpanded(prev => !prev);
+    setIsExpanded((prev) => !prev);
   }, []);
 
   return (
     <Box className="thinking-block-container">
-      <Box 
-        className={lcn('thinking-block-header', { expanded: isExpanded, complete: isComplete })}
+      <Box
+        className={lcn('thinking-block-header', {
+          expanded: isExpanded,
+          complete: isComplete,
+        })}
         onClick={toggleExpanded}
       >
         <Box className="thinking-header-content">
@@ -56,15 +58,18 @@ const ThinkingBlock = ({ content, isComplete }) => {
             <CircularProgress size={14} className="thinking-spinner" />
           )}
           <Typography variant="caption" className="thinking-label">
-            {isComplete 
+            {isComplete
               ? `Thought for ${wordCount} words`
-              : `Thinking... (${wordCount} words)`
-            }
+              : `Thinking... (${wordCount} words)`}
           </Typography>
         </Box>
-        {isExpanded ? <ExpandLess fontSize="small" /> : <ExpandMore fontSize="small" />}
+        {isExpanded ? (
+          <ExpandLess fontSize="small" />
+        ) : (
+          <ExpandMore fontSize="small" />
+        )}
       </Box>
-      
+
       <Collapse in={isExpanded}>
         <Box className="thinking-block-content">
           {showWarning && !hasAccepted ? (
@@ -73,16 +78,17 @@ const ThinkingBlock = ({ content, isComplete }) => {
                 <strong>Warning / אזהרה</strong>
               </Typography>
               <Typography variant="body2" className="warning-text">
-                The thinking traces are often incoherent or don&apos;t make sense to humans. 
-                There is no guarantee they will be useful or accurate.
+                The thinking traces are often incoherent or don&apos;t make
+                sense to humans. There is no guarantee they will be useful or
+                accurate.
               </Typography>
               <Typography variant="body2" className="warning-text" dir="rtl">
-                תיעוד החשיבה לעיתים קרובות אינו קוהרנטי או אינו הגיוני לבני אדם. 
+                תיעוד החשיבה לעיתים קרובות אינו קוהרנטי או אינו הגיוני לבני אדם.
                 אין ערובה שהוא יהיה שימושי או מדויק
               </Typography>
-              <Button 
-                variant="contained" 
-                size="small" 
+              <Button
+                variant="contained"
+                size="small"
                 onClick={handleAcceptWarning}
                 className="warning-accept-button"
               >
@@ -90,15 +96,19 @@ const ThinkingBlock = ({ content, isComplete }) => {
               </Button>
             </Box>
           ) : (
-            <Box className={lcn('thinking-content-inner', { blurred: showWarning })}>
-              <Typography 
-                variant="body2" 
+            <Box
+              className={lcn('thinking-content-inner', {
+                blurred: showWarning,
+              })}
+            >
+              <Typography
+                variant="body2"
                 component="div"
                 dir={textDirection}
-                style={{ 
-                  whiteSpace: 'pre-wrap', 
+                style={{
+                  whiteSpace: 'pre-wrap',
                   wordBreak: 'break-word',
-                  lineHeight: 1.6
+                  lineHeight: 1.6,
                 }}
               >
                 {content.split('\n').map((line, i) => (

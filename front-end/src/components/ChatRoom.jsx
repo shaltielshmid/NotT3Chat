@@ -31,6 +31,9 @@ import ChatSidebar from './ChatSidebar';
 import ModelSelector from './ModelSelector';
 import './ChatRoom.css';
 
+const WARNING_SIZE = 48 * 1024; // 48KB
+const MAX_SIZE = 64 * 1024; // 64KB
+
 const ChatRoom = () => {
   const [messageInput, setMessageInput] = useState('');
   const [isCreatingChat, setIsCreatingChat] = useState(false);
@@ -38,7 +41,19 @@ const ChatRoom = () => {
   const [selectedModel, setSelectedModel] = useState('');
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
   const messagesEndRef = useRef(null);
-  const inputDirection = useMemo(() => getTextDirection(messageInput), [messageInput]);
+  const inputDirection = useMemo(
+    () => getTextDirection(messageInput),
+    [messageInput]
+  );
+
+  // Calculate message size in bytes (UTF-8 encoding)
+  const messageByteSize = useMemo(() => {
+    // eslint-disable-next-line no-undef
+    return new Blob([messageInput]).size;
+  }, [messageInput]);
+
+  const isNearLimit = messageByteSize >= WARNING_SIZE;
+  const isOverLimit = messageByteSize >= MAX_SIZE;
   const { logout } = useAuth();
   const { addNewChat, chats, hasLoaded } = useChats();
   const { chatId } = useParams();
@@ -46,19 +61,22 @@ const ChatRoom = () => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
-  const activeChat = useMemo(() => chats.find(c => c.id == chatId), [chatId, chats]);
-  
+  const activeChat = useMemo(
+    () => chats.find((c) => c.id == chatId),
+    [chatId, chats]
+  );
+
   // Use global SignalR connection
-  const { 
-    messages, 
-    sendMessage, 
+  const {
+    messages,
+    sendMessage,
     regenerateMessage,
     stopGenerating,
-    isConnected, 
+    isConnected,
     isConnecting,
-    currentAssistantMessage, 
+    currentAssistantMessage,
     chooseChat,
-    reconnect 
+    reconnect,
   } = useSignalR();
 
   const scrollToBottom = useCallback(() => {
@@ -84,8 +102,8 @@ const ChatRoom = () => {
       // Find the last assistant message with a model
       const lastAssistantMessage = [...messages]
         .reverse()
-        .find(msg => msg.type === 'assistant' && msg.chatModel);
-      
+        .find((msg) => msg.type === 'assistant' && msg.chatModel);
+
       if (lastAssistantMessage) {
         setSelectedModel(lastAssistantMessage.chatModel);
       }
@@ -102,15 +120,18 @@ const ChatRoom = () => {
     }
   }, [isConnected, pendingMessage, isCreatingChat, sendMessage, selectedModel]);
 
-  const forkChat = useCallback(async (messageId) => {
-    try {
-      const newChat = await chatApi.forkChat(chatId, messageId);
-      addNewChat(newChat);
-      navigate(`/chat/${newChat.id}`);
-    } catch (error) {
-      console.error('Error forking chat:', error);
-    }
-  }, [addNewChat, navigate, chatId]); 
+  const forkChat = useCallback(
+    async (messageId) => {
+      try {
+        const newChat = await chatApi.forkChat(chatId, messageId);
+        addNewChat(newChat);
+        navigate(`/chat/${newChat.id}`);
+      } catch (error) {
+        console.error('Error forking chat:', error);
+      }
+    },
+    [addNewChat, navigate, chatId]
+  );
 
   const createNewChatAndSend = useCallback(
     async (message) => {
@@ -138,6 +159,13 @@ const ChatRoom = () => {
     async (e) => {
       e.preventDefault();
       if (!messageInput.trim()) return;
+
+      // Prevent sending if message is too large
+      // eslint-disable-next-line no-undef
+      const byteSize = new Blob([messageInput]).size;
+      if (byteSize >= MAX_SIZE) {
+        return;
+      }
 
       if (!chatId) {
         // No chat exists, create a new one
@@ -179,7 +207,7 @@ const ChatRoom = () => {
   );
 
   const handleDrawerToggle = useCallback(() => {
-    setMobileDrawerOpen(prev => !prev);
+    setMobileDrawerOpen((prev) => !prev);
   }, []);
 
   const handleDrawerClose = useCallback(() => {
@@ -206,18 +234,14 @@ const ChatRoom = () => {
             </Typography>
             <Chip
               label={
-                isConnecting 
-                  ? 'Connecting...' 
-                  : isConnected 
-                    ? 'Connected' 
+                isConnecting
+                  ? 'Connecting...'
+                  : isConnected
+                    ? 'Connected'
                     : 'Disconnected'
               }
               color={
-                isConnecting 
-                  ? 'warning' 
-                  : isConnected 
-                    ? 'success' 
-                    : 'error'
+                isConnecting ? 'warning' : isConnected ? 'success' : 'error'
               }
               variant="outlined"
               className="connection-chip"
@@ -264,9 +288,9 @@ const ChatRoom = () => {
                 ) : (
                   <Box className="messages-container">
                     {messages.map((message, index) => (
-                      <ChatMessage 
-                        key={message.id} 
-                        message={message} 
+                      <ChatMessage
+                        key={message.id}
+                        message={message}
                         selectedModel={selectedModel}
                         onSetSelectedModel={setSelectedModel}
                         onRegenerateMessage={regenerateMessage}
@@ -329,16 +353,19 @@ const ChatRoom = () => {
                       isCreatingChat ||
                       isConnecting
                     }
+                    error={isOverLimit}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' && !e.shiftKey) {
                         e.preventDefault();
-                        handleSendMessage(e);
+                        if (!isOverLimit) {
+                          handleSendMessage(e);
+                        }
                       }
                     }}
                     slotProps={{
                       htmlInput: {
-                        dir: inputDirection
-                      }
+                        dir: inputDirection,
+                      },
                     }}
                   />
                   {currentAssistantMessage ? (
@@ -358,13 +385,28 @@ const ChatRoom = () => {
                         (chatId && !isConnected) ||
                         !messageInput.trim() ||
                         isCreatingChat ||
-                        !!pendingMessage
+                        !!pendingMessage ||
+                        isOverLimit
                       }
                     >
                       <SendIcon />
                     </Button>
                   )}
                 </Box>
+
+                {/* Message size warning/error */}
+                {isNearLimit && (
+                  <Box className="message-size-warning">
+                    <Typography
+                      variant="caption"
+                      className={isOverLimit ? 'size-error' : 'size-warning'}
+                    >
+                      {isOverLimit
+                        ? `Message too large (${(messageByteSize / 1024).toFixed(1)}KB / 64KB). Please reduce message size to send.`
+                        : `Warning: Message size is ${(messageByteSize / 1024).toFixed(1)}KB / 64KB. Context limit approaching.`}
+                    </Typography>
+                  </Box>
+                )}
               </Box>
             </Paper>
           </Container>
@@ -378,7 +420,7 @@ const ChatRoom = () => {
           onMobileClose={handleDrawerClose}
         />
       </Box>
-          </div>
+    </div>
   );
 };
 

@@ -17,7 +17,7 @@ export const chatApi = {
   forkChat: async (conversationId, messageId) => {
     const response = await api.post('/chats/fork', {
       conversationId,
-      messageId
+      messageId,
     });
     return response.data;
   },

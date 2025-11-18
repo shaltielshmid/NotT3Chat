@@ -1,4 +1,10 @@
-import { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  useCallback,
+} from 'react';
 import PropTypes from 'prop-types';
 import { modelApi } from '../services/modelApi';
 
@@ -53,13 +59,11 @@ export const ModelsProvider = ({ children }) => {
     models,
     loading,
     error,
-    refetch
+    refetch,
   };
 
   return (
-    <ModelsContext.Provider value={value}>
-      {children}
-    </ModelsContext.Provider>
+    <ModelsContext.Provider value={value}>{children}</ModelsContext.Provider>
   );
 };
 

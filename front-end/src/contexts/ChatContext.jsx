@@ -11,7 +11,7 @@ export const ChatProvider = ({ children }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [hasLoaded, setHasLoaded] = useState(false);
-  
+
   const loadChats = useCallback(async () => {
     setLoading(true);
     setError('');
@@ -28,25 +28,24 @@ export const ChatProvider = ({ children }) => {
   }, []);
 
   const addNewChat = useCallback((newChat) => {
-    setChats((prev) => prev.some(c => c.id === newChat.id) ? prev : [newChat, ...prev]);
+    setChats((prev) =>
+      prev.some((c) => c.id === newChat.id) ? prev : [newChat, ...prev]
+    );
   }, []);
 
   const updateChatTitle = useCallback((chatId, newTitle) => {
-    setChats((prev) => 
-      prev.map(chat => 
-        chat.id === chatId 
-          ? { ...chat, title: newTitle }
-          : chat
+    setChats((prev) =>
+      prev.map((chat) =>
+        chat.id === chatId ? { ...chat, title: newTitle } : chat
       )
     );
   }, []);
 
   const deleteChat = useCallback(async (chatId, callApi = true) => {
     try {
-      if (callApi)
-        await chatApi.deleteChat(chatId);
-      setChats((prev) => prev.filter(chat => chat.id !== chatId));
-      
+      if (callApi) await chatApi.deleteChat(chatId);
+      setChats((prev) => prev.filter((chat) => chat.id !== chatId));
+
       return true;
     } catch (err) {
       console.error('Error deleting chat:', err);

@@ -29,18 +29,21 @@ const RegisterPage = () => {
   }, [isAuthenticated, navigate]);
 
   // Check if passwords match whenever either password field changes
-  const passwordsMatch = useMemo(() => !confirmPassword || password === confirmPassword, [password, confirmPassword]);
-  
+  const passwordsMatch = useMemo(
+    () => !confirmPassword || password === confirmPassword,
+    [password, confirmPassword]
+  );
+
   const handleSubmit = useCallback(
     async (e) => {
       e.preventDefault();
-      
+
       // Client-side validation
       if (!email || !password || !confirmPassword) {
         setError('All fields are required');
         return;
       }
-      
+
       if (!passwordsMatch) {
         setError('Passwords do not match');
         return;
@@ -129,7 +132,7 @@ const RegisterPage = () => {
               >
                 {loading ? 'Registering...' : 'Register'}
               </Button>
-              
+
               <Box className="account-link-container">
                 <Typography variant="body2">
                   Already have an account?{' '}

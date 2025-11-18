@@ -55,11 +55,18 @@ const providerClasses = {
 
 const ModelSelector = ({ selectedModel, onModelChange, disabled }) => {
   const { models, loading, error } = useModels();
-  const customProviderFallbackIcon = import.meta.env.VITE_CUSTOM_PROVIDER_FALLBACK_ICON_URL;
+  const customProviderFallbackIcon = import.meta.env
+    .VITE_CUSTOM_PROVIDER_FALLBACK_ICON_URL;
 
   const getFallbackIcon = () => {
     if (customProviderFallbackIcon) {
-      return <img src={customProviderFallbackIcon} alt="Provider" style={{ width: '18px', height: '18px', objectFit: 'contain' }} />;
+      return (
+        <img
+          src={customProviderFallbackIcon}
+          alt="Provider"
+          style={{ width: '18px', height: '18px', objectFit: 'contain' }}
+        />
+      );
     }
     return <Extension />;
   };
@@ -90,7 +97,12 @@ const ModelSelector = ({ selectedModel, onModelChange, disabled }) => {
 
   if (error) {
     return (
-      <Chip label="Error loading models" size="small" color="error" variant="outlined" />
+      <Chip
+        label="Error loading models"
+        size="small"
+        color="error"
+        variant="outlined"
+      />
     );
   }
 

@@ -35,7 +35,7 @@ const serverMessageToLocal = (serverMsg, isComplete = true) => ({
 });
 
 const replaceOrAddMessage = (prevList, newMessage) => {
-  const existingIndex = prevList.findIndex(msg => msg.id === newMessage.id);
+  const existingIndex = prevList.findIndex((msg) => msg.id === newMessage.id);
   if (existingIndex >= 0) {
     return [...prevList.slice(0, existingIndex), newMessage];
   }
@@ -52,11 +52,11 @@ export const SignalRProvider = ({ children }) => {
   const currentChatId = useRef(null);
   const isInitializing = useRef(false);
   const navigate = useNavigate();
-  
+
   const { isAuthenticated } = useAuth();
   const { addNewChat, updateChatTitle, deleteChat, loadChats } = useChats();
   const reconnectTimeoutRef = useRef(null);
-  
+
   // Define event handlers as stable references outside of setupEventHandlers
   const handleConversationHistory = useCallback((convoId, messages) => {
     if (convoId === currentChatId.current) {
@@ -66,7 +66,9 @@ export const SignalRProvider = ({ children }) => {
 
   const handleUserMessage = useCallback((convoId, message) => {
     if (convoId === currentChatId.current) {
-      setMessages((prev) => replaceOrAddMessage(prev, serverMessageToLocal(message)));
+      setMessages((prev) =>
+        replaceOrAddMessage(prev, serverMessageToLocal(message))
+      );
     }
   }, []);
 
@@ -109,7 +111,7 @@ export const SignalRProvider = ({ children }) => {
   const handleRegenerateMessage = useCallback((convoId, messageId) => {
     if (convoId === currentChatId.current) {
       setMessages((prev) => {
-        const messageIndex = prev.findIndex(msg => msg.id === messageId);
+        const messageIndex = prev.findIndex((msg) => msg.id === messageId);
         if (messageIndex >= 0) {
           return prev.slice(0, messageIndex);
         }
@@ -119,17 +121,26 @@ export const SignalRProvider = ({ children }) => {
     }
   }, []);
 
-  const handleChatTitle = useCallback((titleChatId, title) => {
-    updateChatTitle(titleChatId, title);
-  }, [updateChatTitle]);
+  const handleChatTitle = useCallback(
+    (titleChatId, title) => {
+      updateChatTitle(titleChatId, title);
+    },
+    [updateChatTitle]
+  );
 
-  const handleNewConversation = useCallback((convo) => {
-    addNewChat(convo);
-  }, [addNewChat]);
+  const handleNewConversation = useCallback(
+    (convo) => {
+      addNewChat(convo);
+    },
+    [addNewChat]
+  );
 
-  const handleDeleteConversation = useCallback(async (convoId) => {
-    await deleteChat(convoId, false);
-  }, [deleteChat]);
+  const handleDeleteConversation = useCallback(
+    async (convoId) => {
+      await deleteChat(convoId, false);
+    },
+    [deleteChat]
+  );
 
   const handleClose = useCallback(() => {
     setIsConnected(false);
@@ -142,7 +153,9 @@ export const SignalRProvider = ({ children }) => {
     // Reload chats when reconnecting to get any updates that happened while disconnected
     loadChats();
     if (currentChatId.current) {
-      connection?.invoke('ChooseChat', currentChatId.current).catch(() => navigate('/chat'));
+      connection
+        ?.invoke('ChooseChat', currentChatId.current)
+        .catch(() => navigate('/chat'));
     }
   }, [connection, navigate, loadChats]);
 
@@ -150,46 +163,49 @@ export const SignalRProvider = ({ children }) => {
     setIsConnected(false);
   }, []);
 
-  const setupEventHandlers = useCallback((conn) => {
-    // Clean up any existing handlers
-    conn.off('ConversationHistory');
-    conn.off('UserMessage');
-    conn.off('BeginAssistantMessage');
-    conn.off('NewAssistantPart');
-    conn.off('EndAssistantMessage');
-    conn.off('RegenerateMessage');
-    conn.off('ChatTitle');
-    conn.off('NewConversation');
-    conn.off('DeleteConversation');
+  const setupEventHandlers = useCallback(
+    (conn) => {
+      // Clean up any existing handlers
+      conn.off('ConversationHistory');
+      conn.off('UserMessage');
+      conn.off('BeginAssistantMessage');
+      conn.off('NewAssistantPart');
+      conn.off('EndAssistantMessage');
+      conn.off('RegenerateMessage');
+      conn.off('ChatTitle');
+      conn.off('NewConversation');
+      conn.off('DeleteConversation');
 
-    // Set up new handlers
-    conn.on('ConversationHistory', handleConversationHistory);
-    conn.on('UserMessage', handleUserMessage);
-    conn.on('BeginAssistantMessage', handleBeginAssistantMessage);
-    conn.on('NewAssistantPart', handleNewAssistantPart);
-    conn.on('EndAssistantMessage', handleEndAssistantMessage);
-    conn.on('RegenerateMessage', handleRegenerateMessage);
-    conn.on('ChatTitle', handleChatTitle);
-    conn.on('NewConversation', handleNewConversation);
-    conn.on('DeleteConversation', handleDeleteConversation);
+      // Set up new handlers
+      conn.on('ConversationHistory', handleConversationHistory);
+      conn.on('UserMessage', handleUserMessage);
+      conn.on('BeginAssistantMessage', handleBeginAssistantMessage);
+      conn.on('NewAssistantPart', handleNewAssistantPart);
+      conn.on('EndAssistantMessage', handleEndAssistantMessage);
+      conn.on('RegenerateMessage', handleRegenerateMessage);
+      conn.on('ChatTitle', handleChatTitle);
+      conn.on('NewConversation', handleNewConversation);
+      conn.on('DeleteConversation', handleDeleteConversation);
 
-    conn.onclose(handleClose);
-    conn.onreconnected(handleReconnected);
-    conn.onreconnecting(handleReconnecting);
-  }, [
-    handleConversationHistory,
-    handleUserMessage,
-    handleBeginAssistantMessage,
-    handleNewAssistantPart,
-    handleEndAssistantMessage,
-    handleRegenerateMessage,
-    handleChatTitle,
-    handleNewConversation,
-    handleDeleteConversation,
-    handleClose,
-    handleReconnected,
-    handleReconnecting,
-  ]);
+      conn.onclose(handleClose);
+      conn.onreconnected(handleReconnected);
+      conn.onreconnecting(handleReconnecting);
+    },
+    [
+      handleConversationHistory,
+      handleUserMessage,
+      handleBeginAssistantMessage,
+      handleNewAssistantPart,
+      handleEndAssistantMessage,
+      handleRegenerateMessage,
+      handleChatTitle,
+      handleNewConversation,
+      handleDeleteConversation,
+      handleClose,
+      handleReconnected,
+      handleReconnecting,
+    ]
+  );
 
   const closeConnection = useCallback(() => {
     if (connection) {
@@ -202,35 +218,38 @@ export const SignalRProvider = ({ children }) => {
     setCurrentAssistantMessage(null);
     setConnectionError(null);
     isInitializing.current = false;
-    
+
     if (reconnectTimeoutRef.current) {
       clearTimeout(reconnectTimeoutRef.current);
       reconnectTimeoutRef.current = null;
     }
   }, [connection]);
 
-  const chooseChat = useCallback(async (chatId) => {
-    if (!connection || !isConnected) {
-      currentChatId.current = chatId;
-      return;
-    }
-
-    try {
-      currentChatId.current = chatId;
-      setMessages([]);
-      setCurrentAssistantMessage(null);
-      
-      if (chatId) {
-        try {
-          await connection.invoke('ChooseChat', chatId);
-        } catch {
-          navigate('/chat');
-        }
+  const chooseChat = useCallback(
+    async (chatId) => {
+      if (!connection || !isConnected) {
+        currentChatId.current = chatId;
+        return;
       }
-    } catch (error) {
-      console.error('Error choosing chat:', error);
-    }
-  }, [connection, isConnected, navigate]);
+
+      try {
+        currentChatId.current = chatId;
+        setMessages([]);
+        setCurrentAssistantMessage(null);
+
+        if (chatId) {
+          try {
+            await connection.invoke('ChooseChat', chatId);
+          } catch {
+            navigate('/chat');
+          }
+        }
+      } catch (error) {
+        console.error('Error choosing chat:', error);
+      }
+    },
+    [connection, isConnected, navigate]
+  );
 
   const sendMessage = useCallback(
     async (model, message) => {
@@ -258,18 +277,15 @@ export const SignalRProvider = ({ children }) => {
     [connection, isConnected]
   );
 
-  const stopGenerating = useCallback(
-    async () => {
-      if (connection && isConnected && currentChatId.current) {
-        try {
-          await connection.invoke('StopGenerating');
-        } catch (error) {
-          console.error('Error stopping generation:', error);
-        }
+  const stopGenerating = useCallback(async () => {
+    if (connection && isConnected && currentChatId.current) {
+      try {
+        await connection.invoke('StopGenerating');
+      } catch (error) {
+        console.error('Error stopping generation:', error);
       }
-    },
-    [connection, isConnected]
-  );
+    }
+  }, [connection, isConnected]);
 
   const initializeConnection = useCallback(() => {
     if (connection || isInitializing.current) return;
@@ -304,7 +320,7 @@ export const SignalRProvider = ({ children }) => {
       .build();
 
     setupEventHandlers(newConnection);
-    
+
     newConnection
       .start()
       .then(() => {
@@ -320,21 +336,23 @@ export const SignalRProvider = ({ children }) => {
         setIsConnecting(false);
         isInitializing.current = false;
         if (error.statusCode === 401) {
-          console.error('SignalR authentication failed - cookies may not be properly configured');
+          console.error(
+            'SignalR authentication failed - cookies may not be properly configured'
+          );
         }
       });
   }, [connection, setupEventHandlers]);
 
   const reconnect = useCallback(() => {
     if (isConnecting) return; // Already connecting, don't start another
-    
+
     // Force close any existing connection
     closeConnection();
     // Reload chats when manually reconnecting
     loadChats();
     initializeConnection();
   }, [isConnecting, closeConnection, initializeConnection, loadChats]);
-  
+
   // Initialize connection when authenticated
   useEffect(() => {
     if (isAuthenticated && !connection) {
@@ -354,40 +372,40 @@ export const SignalRProvider = ({ children }) => {
     };
   }, [connection]);
 
-  
-  const value = useMemo(() => ({
-    // Connection state
-    isConnected,
-    isConnecting,
-    connectionError,
-    
-    // Chat state
-    messages,
-    currentAssistantMessage,
-    
-    // Actions
-    chooseChat,
-    sendMessage,
-    regenerateMessage,
-    stopGenerating,
-    reconnect,
-  }), [
-    isConnected,
-    isConnecting,
-    connectionError,
-    messages,
-    currentAssistantMessage,
-    chooseChat,
-    sendMessage,
-    regenerateMessage,
-    stopGenerating,
-    reconnect,
-  ]);
+  const value = useMemo(
+    () => ({
+      // Connection state
+      isConnected,
+      isConnecting,
+      connectionError,
+
+      // Chat state
+      messages,
+      currentAssistantMessage,
+
+      // Actions
+      chooseChat,
+      sendMessage,
+      regenerateMessage,
+      stopGenerating,
+      reconnect,
+    }),
+    [
+      isConnected,
+      isConnecting,
+      connectionError,
+      messages,
+      currentAssistantMessage,
+      chooseChat,
+      sendMessage,
+      regenerateMessage,
+      stopGenerating,
+      reconnect,
+    ]
+  );
 
   return (
-    <SignalRContext.Provider value={value}>
-      {children}
-    </SignalRContext.Provider>
+    <SignalRContext.Provider value={value}>{children}</SignalRContext.Provider>
   );
 };
 
