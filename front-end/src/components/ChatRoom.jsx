@@ -407,6 +407,15 @@ const ChatRoom = () => {
                     </Typography>
                   </Box>
                 )}
+
+                {/* Disclaimer */}
+                <Box className="disclaimer-text">
+                  <Typography variant="caption" color="text.secondary">
+                    Experimental model. Can make mistakes, please verify
+                    responses. Don&apos;t share sensitive info • מודל ניסיוני.
+                    יכול לטעות - אנא אמתו תשובות. אל תשתפו מידע רגיש
+                  </Typography>
+                </Box>
               </Box>
             </Paper>
           </Container>

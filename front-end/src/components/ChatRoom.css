@@ -147,3 +147,21 @@
   color: #e53e3e;
   font-weight: 600;
 }
+
+.chat-room .disclaimer-text {
+  text-align: center;
+  padding: 0;
+  margin-top: -4px;
+  line-height: 1.2;
+  opacity: 1;
+}
+
+.chat-room .disclaimer-text .MuiTypography-caption {
+  font-size: 0.68rem;
+}
+
+@media (max-width: 899px) {
+  .chat-room .disclaimer-text .MuiTypography-caption {
+    font-size: 0.6rem;
+  }
+}
