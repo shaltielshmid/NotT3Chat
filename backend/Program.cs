@@ -670,6 +670,9 @@ namespace NotT3ChatBackend.Services {
                 },
                 ToolCallsHandler = ToolCallsHandler.ContinueConversation,
                 OnFinished = async (data) => {
+                    if (data.FinishReason == ChatMessageFinishReasons.Unknown)
+                        throw new Exception("The generation was aborted due to an issue.");
+
                     _logger.LogInformation("Assistant message completed for conversation: {ConversationId}", convoId);
                     await hubContext.Clients.Group(convoId).SendAsync("EndAssistantMessage", convoId, null);
 
@@ -1080,6 +1083,8 @@ namespace NotT3ChatBackend.Utils {
     /// Hyper optimized so that we don't waste time on this
     /// </summary>
     public sealed class RepetitionGuard {
+        private static readonly bool _enabled = Environment.GetEnvironmentVariable("REPGUARD_ENABLE") == "true";
+
         const int BufferSize = 1024; // *Must be a power of 2 to work*
         const int ModuloNumber = BufferSize - 1;
         const int MaxTokenRep = 32;
@@ -1094,6 +1099,9 @@ namespace NotT3ChatBackend.Utils {
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool NewToken(string? token) {
+            if (!_enabled)
+                return false;
+
             // Don't count whitespace in repetition
             if (string.IsNullOrWhiteSpace(token)) 
                 return false;
