@@ -8,7 +8,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="LlmTornado" Version="3.8.15" />
+    <PackageReference Include="LlmTornado" Version="3.8.26" />
     <PackageReference Include="LlmTornado.Toolkit" Version="1.0.0" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.Google" Version="10.0.0" />
     <PackageReference Include="Microsoft.AspNetCore.DataProtection.EntityFrameworkCore" Version="10.0.0" />

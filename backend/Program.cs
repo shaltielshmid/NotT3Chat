@@ -635,7 +635,7 @@ namespace NotT3ChatBackend.Services {
                 await streamingMessage.Semaphore.WaitAsync();
                 try {
                     if (streamingMessage.RepGuard.NewToken(content)) {
-                        streamingMessage.CustomError = JsonSerializer.Serialize(new { error = "Generation stopped: the model fell into a repetition loop.\nיצירת הטקסט נעצרה: המודל נכנס ללולאת חזרה" }, new JsonSerializerOptions() { Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping });
+                        streamingMessage.CustomError = RepetitionGuard.ErrorMessage;
                         streamingMessage.Ct.Cancel();
                     }
                     streamingMessage.SbMessage.Append(content);
@@ -670,8 +670,8 @@ namespace NotT3ChatBackend.Services {
                 },
                 ToolCallsHandler = ToolCallsHandler.ContinueConversation,
                 OnFinished = async (data) => {
-                    if (data.FinishReason == ChatMessageFinishReasons.Unknown)
-                        throw new Exception("The generation was aborted due to an issue.");
+                    if (data.StopReason == "repetition_guard")
+                        throw new Exception(RepetitionGuard.ErrorMessage);
 
                     _logger.LogInformation("Assistant message completed for conversation: {ConversationId}", convoId);
                     await hubContext.Clients.Group(convoId).SendAsync("EndAssistantMessage", convoId, null);
@@ -1083,6 +1083,8 @@ namespace NotT3ChatBackend.Utils {
     /// Hyper optimized so that we don't waste time on this
     /// </summary>
     public sealed class RepetitionGuard {
+        public static string ErrorMessage { get; } = JsonSerializer.Serialize(new { error = "Generation stopped: the model fell into a repetition loop.\nיצירת הטקסט נעצרה: המודל נכנס ללולאת חזרה" }, new JsonSerializerOptions() { Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping });
+
         private static readonly bool _enabled = Environment.GetEnvironmentVariable("REPGUARD_ENABLE") == "true";
 
         const int BufferSize = 1024; // *Must be a power of 2 to work*
