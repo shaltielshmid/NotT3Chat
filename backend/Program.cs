@@ -661,7 +661,7 @@ namespace NotT3ChatBackend.Services {
                 FunctionCallHandler = async (fns) => {
                     foreach (var fn in fns) {
                         if (fn.Name == "web_search" && fn.Result is not null) {
-                            var results = JsonSerializer.Deserialize<JsonNode>(JsonSerializer.Deserialize<string>(fn.Result.Content)!)!
+                            var results = JsonSerializer.Deserialize<JsonNode>(fn.Result.Content)!
                                                 ["Result"].Deserialize<List<ExaApiService.ResultItem>>();
                             await SendNewContent($"<WebSearch>{JsonSerializer.Serialize(results.Select(res => res.Url).ToList())}</WebSearch>", false);
                         }
