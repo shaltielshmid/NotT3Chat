@@ -18,6 +18,7 @@ import ChatRoom from './components/ChatRoom';
 import ProtectedRoute from './components/ProtectedRoute';
 import RegisterPage from './components/RegisterPage';
 import { setNavigate } from './services/navigationService';
+import { initGA } from './utils/analytics';
 
 // Get custom font URL and family from environment
 const customFontUrl = import.meta.env.VITE_CUSTOM_FONT_URL;
@@ -135,6 +136,11 @@ const AppRoutes = () => {
 };
 
 const App = () => {
+  // Initialize Google Analytics
+  useEffect(() => {
+    initGA();
+  }, []);
+
   // Set document title and favicon
   useEffect(() => {
     // Set page title
