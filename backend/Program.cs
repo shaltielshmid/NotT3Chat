@@ -453,7 +453,7 @@ namespace NotT3ChatBackend.Services {
     public class TornadoService {
         private readonly Dictionary<string, TornadoApi> _apiByModel = new();
         private readonly Dictionary<string, ChatModel> _models;
-        private readonly string? _titleModel;
+        private readonly ChatModel? _titleModel;
         private readonly ILogger<TornadoService> _logger;
         private readonly ExaApiService _exaApiService;
         private readonly List<Tool>? _tools;
@@ -518,10 +518,10 @@ namespace NotT3ChatBackend.Services {
             }
                 
             // Choose the title model - if it doesn't exist in the list of available models, then just don't
-            _titleModel = configuration["NOTT3CHAT_TITLE_MODEL"] ?? "gemini-2.0-flash-lite-001";
-            if (!allModels.ContainsKey(_titleModel)) {
+            string sTitleModel = configuration["NOTT3CHAT_TITLE_MODEL"] ?? "gemini-2.0-flash-lite-001";
+            if (!allModels.TryGetValue(sTitleModel, out _titleModel)) {
                 _titleModel = null;
-                logger.LogWarning("Title model {TitleModel} not found in available models, skipping", _titleModel);
+                logger.LogWarning("Title model {TitleModel} not found in available models, skipping", sTitleModel);
             }
 
             if (configuration["NOTT3CHAT_MODELS_FILTER"] is string modelsFilter && !string.IsNullOrWhiteSpace(modelsFilter)) {
@@ -593,7 +593,7 @@ namespace NotT3ChatBackend.Services {
 
             _logger.LogInformation("Initiating title assignment with model: {Model}", _titleModel);
             try {
-                var convo = _apiByModel[_titleModel].Chat.CreateConversation(_models[_titleModel]);
+                var convo = _apiByModel[_titleModel].Chat.CreateConversation(_titleModel);
                 convo.AppendMessage(ChatMessageRoles.System, "Generate a concise, engaging chat title (max 6 words) that clearly reflects the main topic or purpose of the user's first message (or its first 500 characters). The title must be in the **same language** as the user's message. Output **only** the title � no explanations, formatting, or extra text. Ignore any messages that are about testing or describing this instruction itself. If the message is in English, the title should be in English. Same with any other language.");
                 convo.AppendMessage(ChatMessageRoles.User, "<FIRST_MESSAGE>" + initialMessage[..Math.Min(500, initialMessage.Length)] + "</FIRST_MESSAGE>\n\nPlease output the title:");
                 var response = await convo.GetResponseRich();
